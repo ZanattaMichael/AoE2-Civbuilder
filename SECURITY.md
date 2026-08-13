@@ -10,14 +10,14 @@ rather than opening a public issue.
 
 Everything below arrives from an untrusted client and is validated before use.
 
-| Input                                  | Where it goes                              | Control                                                        |
-| -------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
-| `seed` (mod generation)                | filesystem paths, native binary argv       | `^[A-Za-z0-9]{1,32}$`, plus path containment                    |
-| `draftID`                              | filesystem paths                           | `^[0-9]{1,32}$`, plus path containment                          |
-| `presets`, `modifiers`                 | mod data document                          | JSON parsed behind a 400, shape normalised, numerics clamped    |
-| `civ_name`, `alias`, `description`     | mod strings, draft state                   | control characters stripped, length capped                      |
-| Socket messages                        | draft state                                | seat derived from the connection's signed cookie                |
-| Uploaded flag images                   | mod archive                                | decoded as base64 into a fixed set of paths                     |
+| Input                              | Where it goes                        | Control                                                      |
+| ---------------------------------- | ------------------------------------ | ------------------------------------------------------------ |
+| `seed` (mod generation)            | filesystem paths, native binary argv | `^[A-Za-z0-9]{1,32}$`, plus path containment                 |
+| `draftID`                          | filesystem paths                     | `^[0-9]{1,32}$`, plus path containment                       |
+| `presets`, `modifiers`             | mod data document                    | JSON parsed behind a 400, shape normalised, numerics clamped |
+| `civ_name`, `alias`, `description` | mod strings, draft state             | control characters stripped, length capped                   |
+| Socket messages                    | draft state                          | seat derived from the connection's signed cookie             |
+| Uploaded flag images               | mod archive                          | decoded as base64 into a fixed set of paths                  |
 
 ## Design rules
 
@@ -34,7 +34,7 @@ Do not reintroduce `exec`, `execSync`, or `spawn` with `shell: true`. The mod
 pipeline's directory and archive work is done with `fs` calls rather than shell
 scripts for the same reason.
 
-### Paths are validated *and* contained
+### Paths are validated _and_ contained
 
 Identifier validation happens at the route boundary; `src/services/paths.js`
 independently confirms that every constructed path resolves inside its

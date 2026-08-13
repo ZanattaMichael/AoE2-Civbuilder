@@ -30,14 +30,14 @@ CI runs the same checks plus `npm audit` and a Docker build.
 
 ## Where things belong
 
-| Adding...                   | Goes in                       |
-| --------------------------- | ----------------------------- |
-| An HTTP endpoint            | `src/routes/`                 |
-| Request pre-processing      | `src/middleware/`             |
-| Business logic              | `src/services/`               |
-| A socket event              | `src/sockets/draft.js`        |
-| Game rules with no I/O      | `src/services/draft-logic.js` |
-| Configuration               | `src/config.js` + `.env.example` |
+| Adding...              | Goes in                          |
+| ---------------------- | -------------------------------- |
+| An HTTP endpoint       | `src/routes/`                    |
+| Request pre-processing | `src/middleware/`                |
+| Business logic         | `src/services/`                  |
+| A socket event         | `src/sockets/draft.js`           |
+| Game rules with no I/O | `src/services/draft-logic.js`    |
+| Configuration          | `src/config.js` + `.env.example` |
 
 Keep game rules pure and free of I/O — that is what makes them testable.
 

@@ -33,8 +33,9 @@ The native `create-data-mod` binary is needed for mod generation. To build it:
 
 ```bash
 git submodule update --init modding/genieutils
-sudo apt-get install build-essential cmake libjsoncpp-dev
-cd modding && ../modding/scripts/build.sh
+sudo apt-get install build-essential cmake libjsoncpp-dev \
+    zlib1g-dev liblz4-dev libboost-iostreams-dev
+cd modding && ./scripts/build.sh
 ```
 
 Everything except mod generation works without it; `GET /civbuilder/readyz`
@@ -42,27 +43,27 @@ reports whether it was found.
 
 ## Scripts
 
-| Command                 | Description                                  |
-| ----------------------- | -------------------------------------------- |
-| `npm start`             | Run the server                               |
-| `npm run dev`           | Run with file watching                       |
-| `npm test`              | Run the test suite                           |
-| `npm run test:coverage` | Run tests with a coverage report and gate    |
-| `npm run lint`          | Lint with ESLint                             |
-| `npm run format`        | Format with Prettier                         |
+| Command                 | Description                               |
+| ----------------------- | ----------------------------------------- |
+| `npm start`             | Run the server                            |
+| `npm run dev`           | Run with file watching                    |
+| `npm test`              | Run the test suite                        |
+| `npm run test:coverage` | Run tests with a coverage report and gate |
+| `npm run lint`          | Lint with ESLint                          |
+| `npm run format`        | Format with Prettier                      |
 
 ## Configuration
 
 All configuration is environment-driven; see `.env.example` for the full list.
 The ones that matter most:
 
-| Variable        | Default                            | Notes                                            |
-| --------------- | ---------------------------------- | ------------------------------------------------ |
-| `COOKIE_SECRET` | —                                  | **Required in production.** Signs seat cookies.   |
-| `PORT`          | `4000`                             | Listen port                                       |
-| `APP_DIR`       | repository root                    | Root for all derived paths                        |
-| `BASE_PATH`     | `/civbuilder`                      | Path prefix the app is mounted under              |
-| `PUBLIC_URL`    | `http://localhost:4000/civbuilder` | Used to build draft invite links                  |
+| Variable        | Default                            | Notes                                                |
+| --------------- | ---------------------------------- | ---------------------------------------------------- |
+| `COOKIE_SECRET` | —                                  | **Required in production.** Signs seat cookies.      |
+| `PORT`          | `4000`                             | Listen port                                          |
+| `APP_DIR`       | repository root                    | Root for all derived paths                           |
+| `BASE_PATH`     | `/civbuilder`                      | Path prefix the app is mounted under                 |
+| `PUBLIC_URL`    | `http://localhost:4000/civbuilder` | Used to build draft invite links                     |
 | `CORS_ORIGINS`  | empty                              | Comma-separated allowed origins; empty = same-origin |
 
 ## Architecture

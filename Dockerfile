@@ -9,6 +9,8 @@
 # ---------------------------------------------------------------------------
 FROM debian:bookworm-slim AS native-build
 
+# genieutils requires ZLIB, LZ4, Boost.iostreams and Iconv (see its
+# CMakeLists.txt); jsoncpp is linked by create-data-mod itself.
 RUN apt-get update && apt-get install --no-install-recommends -y \
         build-essential \
         cmake \
@@ -16,6 +18,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
         ca-certificates \
         libjsoncpp-dev \
         zlib1g-dev \
+        liblz4-dev \
+        libboost-iostreams-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -57,10 +61,13 @@ RUN npm ci --omit=dev
 # ---------------------------------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
 
-# libjsoncpp is linked dynamically by create-data-mod; tini reaps zombies from
-# the native binary so PID 1 does not accumulate defunct children.
+# Only -static-libstdc++ is passed at link time, so create-data-mod still needs
+# its shared dependencies at runtime. tini reaps zombies from the native binary
+# so PID 1 does not accumulate defunct children.
 RUN apt-get update && apt-get install --no-install-recommends -y \
         libjsoncpp25 \
+        liblz4-1 \
+        libboost-iostreams1.74.0 \
         tini \
     && rm -rf /var/lib/apt/lists/*
 

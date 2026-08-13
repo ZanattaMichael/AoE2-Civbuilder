@@ -1,12 +1,18 @@
 node_modules
 coverage
 package-lock.json
-modding
-misc
-drafts
-public/aoe2techtree
-public/img
-public/vanillaFiles
-process_mod/createTechtreeJson.js
+
+# Legacy code and large generated data tables. These predate the formatting
+# config; reformatting them would bury real changes under a whitespace diff.
+# New server code (src/, tests/) and config/docs are formatted.
+.vscode/
+misc/
+modding/
+drafts/
+public/
 process_mod/constants.js
-public/js/common.js
+process_mod/createTechtreeJson.js
+process_mod/createCivilizationsJson.js
+process_mod/modAI.js
+process_mod/modStrings.js
+process_mod/random/
