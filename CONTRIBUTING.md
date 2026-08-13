@@ -14,10 +14,17 @@ npm test
 ```bash
 npm run lint
 npm run format
-npm test
+npm run test:all
 ```
 
 CI runs the same checks plus `npm audit` and a Docker build.
+
+The end-to-end suite needs a browser. Playwright downloads one on first use
+(`npx playwright install chromium`), or point it at an existing install:
+
+```bash
+CHROMIUM_PATH=/path/to/chrome npm run test:e2e
+```
 
 ## Conventions
 
@@ -55,7 +62,20 @@ To see server logs while debugging a test:
 
 ```bash
 LOG_LEVEL=debug npx vitest run tests/routes.test.js
+E2E_LOG_LEVEL=debug npm run test:e2e
 ```
+
+### End-to-end tests
+
+`e2e/` drives a real browser against a real server process started by
+`e2e/fixture-server.js`, which builds a throwaway `APP_DIR` with placeholder
+art and a stub `create-data-mod`. Add a spec here when a change spans the
+client, the cookie layer and the server — the seams unit tests cannot reach.
+The Content-Security-Policy regression that blocked the site's own jQuery is
+the archetype: every layer was individually correct.
+
+Third-party origins are blocked in these tests, so a spec must not depend on a
+CDN being reachable. Add browser libraries to `public/vendor/` instead.
 
 ## Security-sensitive areas
 

@@ -97,12 +97,14 @@ router.post(
 );
 
 /**
- * The host, player and spectator views are all the same page; which one the
- * client renders is decided from the gamestate it receives over the socket.
+ * The host and player invite links show the join form. A visitor who already
+ * holds a seat is redirected to the draft page rather than being served it
+ * here: draft.html resolves its assets with "../", which is only correct at
+ * the /draft/:id depth.
  */
 function draftPage(req, res) {
 	if (req.playerNumber >= 0) {
-		return res.sendFile("draft.html", { root: `${config.dirs.public}/html` });
+		return res.redirect(`${config.basePath}/draft/${req.draftId}`);
 	}
 	return res.sendFile("join.html", { root: `${config.dirs.public}/html` });
 }

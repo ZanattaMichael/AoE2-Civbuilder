@@ -47,8 +47,10 @@ reports whether it was found.
 | ----------------------- | ----------------------------------------- |
 | `npm start`             | Run the server                            |
 | `npm run dev`           | Run with file watching                    |
-| `npm test`              | Run the test suite                        |
+| `npm test`              | Run the unit and integration suite        |
 | `npm run test:coverage` | Run tests with a coverage report and gate |
+| `npm run test:e2e`      | Run the Playwright end-to-end suite       |
+| `npm run test:all`      | Run both suites                           |
 | `npm run lint`          | Lint with ESLint                          |
 | `npm run format`        | Format with Prettier                      |
 
@@ -90,7 +92,9 @@ src/
 process_mod/            generation modules (names, tech trees, icons, strings)
 modding/                C++ .dat rewriting (genieutils + jsoncpp)
 public/                 client-side pages and game assets
-tests/                  Vitest suites
+  vendor/               third-party browser libraries, served from this origin
+tests/                  Vitest unit and integration suites
+e2e/                    Playwright end-to-end suites
 ```
 
 `server.js` at the root remains as a thin compatibility shim re-exporting from
@@ -115,12 +119,31 @@ Generation is driven by a seeded PRNG (`process_mod/rng.js`) threaded through
 the random modules, so the same seed produces the same mod. Modules default to
 non-deterministic randomness when no generator is supplied.
 
+## Testing
+
+Two suites, run separately:
+
+- **`npm test`** — Vitest. Unit and integration coverage of validation, path
+  containment, draft rules, seeded generation, HTTP routes and socket
+  authorization. Each test process gets an isolated `APP_DIR`.
+- **`npm run test:e2e`** — Playwright. Drives a real browser against a real
+  server: page loading and CSP, mod generation and download, and multiplayer
+  drafting across independent browser contexts.
+
+Both stub only the native `create-data-mod` binary; everything else is the
+production code path. To run the E2E suite against a browser already installed
+on the machine rather than one Playwright downloads:
+
+```bash
+CHROMIUM_PATH=/path/to/chrome npm run test:e2e
+```
+
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the trust boundaries and how to report an
 issue.
 
-Two properties are worth knowing when changing this code:
+Three properties are worth knowing when changing this code:
 
 - **External programs are invoked through `src/services/command.js` only**,
   which uses `execFile` with an argv array. Never reintroduce `exec` with an
@@ -128,6 +151,9 @@ Two properties are worth knowing when changing this code:
 - **Draft seats are proved by a signed, httpOnly token**, never by a
   client-supplied player number. Socket handlers read the seat from the
   connection, not the message.
+- **Browser libraries are served from this origin**, not a CDN. jQuery lives in
+  `public/vendor/` and the Content-Security-Policy allows no third-party script
+  source, so a compromised CDN cannot execute script here.
 
 ## Credits
 

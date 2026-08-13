@@ -46,6 +46,15 @@ module.exports = [
 		},
 	},
 	{
+		// Playwright specs are CommonJS and run in Node, driving a browser
+		// remotely; browser globals appear only inside page.evaluate callbacks.
+		files: ["e2e/**/*.js"],
+		languageOptions: {
+			sourceType: "commonjs",
+			globals: { ...globals.node, ...globals.browser },
+		},
+	},
+	{
 		// Vitest's API is ESM-only, so test files use import syntax even though
 		// the modules they exercise are CommonJS.
 		files: ["tests/**/*.js"],

@@ -6,6 +6,9 @@
 node_modules
 coverage
 tests
+e2e
+playwright-report
+test-results
 
 # Build output — the image rebuilds these from source in the build stage.
 modding/build

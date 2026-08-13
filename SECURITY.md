@@ -55,6 +55,17 @@ Note that `cookie-parser`'s `signedCookie()` returns an unprefixed value
 unchanged rather than rejecting it, so the `s:` prefix is checked explicitly
 before unsigning.
 
+### Browser libraries are served from this origin
+
+jQuery is vendored in `public/vendor/` rather than loaded from a CDN, and the
+Content-Security-Policy names no third-party script source. A compromised CDN
+therefore cannot execute script on this origin. Add new browser libraries the
+same way; do not widen `script-src`.
+
+The policy is asserted from a real browser in `e2e/pages.spec.js`, which also
+guards the opposite failure: a policy so strict it blocks the site's own
+assets.
+
 ### Failures are contained
 
 A terminal error handler converts thrown errors into status codes and never

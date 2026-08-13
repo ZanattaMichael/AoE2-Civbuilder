@@ -35,9 +35,15 @@ function createApp() {
 			contentSecurityPolicy: {
 				directives: {
 					defaultSrc: ["'self'"],
-					// The pages build their DOM inline and load images from data URIs.
+					// No third-party script origins: jQuery is vendored under
+					// public/vendor rather than loaded from a CDN, so a compromised
+					// CDN cannot execute script on this origin. 'unsafe-inline' is
+					// still required because the pages build their DOM with inline
+					// handlers and the pug views inline their scripts.
 					scriptSrc: ["'self'", "'unsafe-inline'"],
-					styleSrc: ["'self'", "'unsafe-inline'"],
+					// draft.html pulls the Merriweather webfont from Google Fonts.
+					styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+					fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
 					imgSrc: ["'self'", "data:"],
 					connectSrc: ["'self'", "ws:", "wss:"],
 					objectSrc: ["'none'"],

@@ -29,6 +29,8 @@ modding/pcrio/CMakeFiles/
 # Test and coverage output
 coverage/
 .vitest/
+playwright-report/
+test-results/
 
 # Local environment
 .env
