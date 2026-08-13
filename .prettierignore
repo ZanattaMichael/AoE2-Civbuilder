@@ -1,0 +1,12 @@
+node_modules
+coverage
+package-lock.json
+modding
+misc
+drafts
+public/aoe2techtree
+public/img
+public/vanillaFiles
+process_mod/createTechtreeJson.js
+process_mod/constants.js
+public/js/common.js

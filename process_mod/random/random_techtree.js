@@ -1,9 +1,15 @@
+const { defaultRng } = require("../rng.js");
+
 module.exports = {
 	generateTechTree,
+	validateTechTree,
 };
 
+// Set for the duration of a generateTechTree() call; see random_name.js.
+let activeRng = defaultRng;
+
 function getRandomInt(min, max) {
-	return Math.floor(Math.random() * (max - min) + min);
+	return activeRng.range(min, max);
 }
 
 function populateTech(techtree, index) {
@@ -181,7 +187,8 @@ function validateTechTree(techtree) {
 128	Blast Furnace
 129	Scale Barding Armor*/
 
-function generateTechTree() {
+function generateTechTree(rng = defaultRng) {
+	activeRng = rng;
 	var treeStructure = [
 		[-1, -1],
 		[-1, -1],

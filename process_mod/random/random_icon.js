@@ -1,6 +1,10 @@
 //Create canvas with black background
-const fs = require("fs-js");
-const { createCanvas, loadImage, Image } = require("canvas");
+const fs = require("fs");
+const { createCanvas, loadImage } = require("canvas");
+const { defaultRng } = require("../rng.js");
+
+// Set for the duration of a generateSeed()/generateFlags() call; see random_name.js.
+let activeRng = defaultRng;
 
 module.exports = {
   getRandomInt,
@@ -11,11 +15,14 @@ module.exports = {
 
 //Generate a random integer from 0 to n-1 (inclusive)
 function getRandomInt(n) {
-  return Math.floor(Math.random() * Math.floor(n));
+  return activeRng.int(Math.floor(n));
 }
 
 //Generate random colour palette, division, overlay, and symbol
-function generateSeed() {
+// Defaults to the generator already in effect so that a generateSeed() call
+// nested inside generateFlags() does not reset the seeded stream mid-run.
+function generateSeed(rng = activeRng) {
+  activeRng = rng;
   //Division is an integer representing the background pattern
   var division = getRandomInt(12);
 
@@ -451,7 +458,8 @@ async function drawFlag(seed, symbol, output_paths, input_path) {
   }
 }
 
-async function generateFlags(output_path1, output_path2, input_path) {
+async function generateFlags(output_path1, output_path2, input_path, rng = defaultRng) {
+  activeRng = rng;
   //Array of symbols that haven't been used yet
   var symbols = [];
   for (var i = 0; i < 39; i++) {

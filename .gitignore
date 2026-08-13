@@ -1,12 +1,40 @@
-package-lock.json
-#modding/genieutils
-modding/oldgenieutils
+# Dependencies
 node_modules
-modding/build
-modding/vcpkg
+
+# Runtime state
+database.json
+drafts/*.json
+logs.txt
+misc/logs.txt
+*.log
+
+# Generated mods
 modding/requested_mods/*
 !modding/requested_mods/README.md
 !modding/requested_mods/cleanup.sh
-database.json
-drafts/*.json
-process_mod/randomName.js
+
+# C++ build output
+modding/build
+modding/vcpkg
+modding/oldgenieutils
+modding/CMakeFiles/
+modding/CMakeCache.txt
+modding/Makefile
+modding/cmake_install.cmake
+modding/create-data-mod
+modding/pcrio/CMakeFiles/
+*.o
+*.o.d
+
+# Test and coverage output
+coverage/
+.vitest/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor/OS noise
+.DS_Store
+*.swp
