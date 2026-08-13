@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # canvas ships prebuilt binaries, but nothing in lint or test needs them
+      # to be executable, so build scripts are skipped for speed.
+      - run: npm ci --ignore-scripts
+
+      - run: npm run lint
+
+      - run: npm run format:check
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      # Fails the build on a known-vulnerable production dependency.
+      - run: npm audit --audit-level=high --omit=dev
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: aoe2-civbuilder:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify the image starts and reports healthy
+        run: |
+          docker run -d --name civbuilder \
+            -e COOKIE_SECRET=ci-only-secret \
+            -e PORT=4000 \
+            -p 4000:4000 \
+            aoe2-civbuilder:ci
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4000/civbuilder/healthz > /dev/null; then
+              echo "Service is up"
+              curl -sS http://127.0.0.1:4000/civbuilder/readyz || true
+              docker rm -f civbuilder
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Service failed to become healthy"
+          docker logs civbuilder
+          docker rm -f civbuilder
+          exit 1

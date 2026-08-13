@@ -213,7 +213,9 @@ function applyPick(draft, playerNumber, pick, clientTurn, rng = defaultRng) {
 	if (playerNumber !== expectedPlayer) {
 		return { ok: false, reason: "not-your-turn" };
 	}
-	if (!draft.gamestate.cards.includes(pick)) {
+	// -1 marks a slot whose card has already been taken, so it is present in the
+	// board array but is not a selectable card.
+	if (!Number.isInteger(pick) || pick < 0 || !draft.gamestate.cards.includes(pick)) {
 		return { ok: false, reason: "card-not-on-board" };
 	}
 

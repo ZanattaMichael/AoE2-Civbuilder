@@ -36,7 +36,10 @@ function seatTokenFromHandshake(socket) {
 		return null;
 	}
 	const raw = parsed[SEAT_COOKIE];
-	if (!raw) {
+	// signedCookie() returns an unprefixed value unchanged rather than rejecting
+	// it, so the "s:" prefix must be required explicitly. Without this check an
+	// attacker could present an unsigned cookie and have it accepted verbatim.
+	if (!raw || !raw.startsWith("s:")) {
 		return null;
 	}
 	const unsigned = cookieParser.signedCookie(raw, config.cookieSecret);

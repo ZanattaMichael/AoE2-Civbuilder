@@ -40,9 +40,21 @@ module.exports = [
 	},
 	{
 		// Server-side sources are held to the full rule set.
-		files: ["src/**/*.js", "tests/**/*.js"],
+		files: ["src/**/*.js"],
 		rules: {
 			"no-unused-vars": ["error", { argsIgnorePattern: "^_|^next$", caughtErrors: "none" }],
+		},
+	},
+	{
+		// Vitest's API is ESM-only, so test files use import syntax even though
+		// the modules they exercise are CommonJS.
+		files: ["tests/**/*.js"],
+		languageOptions: {
+			sourceType: "module",
+			globals: { ...globals.node },
+		},
+		rules: {
+			"no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none" }],
 		},
 	},
 	{

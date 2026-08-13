@@ -5,10 +5,19 @@ var client_alias;
 var client_architecture;
 var client_language;
 
+//The seat this client holds, as assigned by the server on join. -1 means
+//spectator. Previously this was read from a cookie, which the client could set
+//to any value in order to act as another player.
+var clientSeat = -1;
+
+function getPlayerNumber() {
+	return clientSeat;
+}
+
 function renderLobby(draft) {
 	$("body").contents().not("script").remove();
 
-	var playerNumber = getCookie("playerNumber");
+	var playerNumber = getPlayerNumber();
 
 	var title = document.createElement("h1");
 	title.id = "title";
@@ -88,7 +97,7 @@ function renderSnipe(draft) {}
 function renderTechtree(draft) {
 	$("body").contents().not("script").remove();
 
-	var playerNumber = getCookie("playerNumber");
+	var playerNumber = getPlayerNumber();
 
 	if (playerNumber >= 0 && draft["players"][playerNumber]["ready"] === 0) {
 		var waiting = document.createElement("div");
@@ -117,7 +126,7 @@ function renderTechtree(draft) {
 function renderFlagTech(draft) {
 	$("body").contents().not("script").remove();
 
-	var playerNumber = getCookie("playerNumber");
+	var playerNumber = getPlayerNumber();
 
 	if (playerNumber >= 0 && draft["players"][playerNumber]["ready"] === 0) {
 		var flag_palette;
@@ -337,7 +346,7 @@ function renderDraftTable(draft) {
 	if (roundType == 2 || roundType == 4) {
 		playerNum = draft["gamestate"]["order"][numPlayers - 1 - (draft["gamestate"]["turn"] % numPlayers)];
 	}
-	var playerNumber = getCookie("playerNumber");
+	var playerNumber = getPlayerNumber();
 
 	//If looking at tech tree, don't disturb the player until they exit the techtree, or it is their turn
 	var techtreestyles = document.getElementById("tech_styles");
@@ -938,51 +947,53 @@ const path = window.location.pathname;
 var parts = pathToArr(path);
 var roomID = parts[parts.length - 1];
 
-if (roomID != getCookie("draftID")) {
-	alert("Spectator Permission Error");
-}
-
 socket.emit("join room", roomID);
-socket.emit("get gamestate", roomID, getCookie("playerNumber"));
+
+//The server decides which seat this client holds and announces it on join.
+//It is never read from a cookie, which a client could set to any value.
+socket.on("seat assigned", function (seat) {
+	clientSeat = seat;
+	socket.emit("get gamestate");
+});
 
 socket.on("set gamestate", function (draft) {
 	renderGame(draft);
 });
 
-socket.on("bug", function () {
-	alert(
-		"Congratulations! Your draft experienced a bug causing multiple players to have the same card. I have been hunting this bug forever and have yet to find the cause. PLEASE message me on discord, Krakenmeister#1672 and detail everything you just did so I can try to find a solution. Thank you so much! Your draft could be completely messed up or just have a minor issue, continue at your own risk."
-	);
+socket.on("generation failed", function (payload) {
+	alert("Mod creation failed: " + (payload && payload.error ? payload.error : "unknown error"));
 });
 
+//The server now derives the acting player from the connection, so these
+//no longer send a room ID or a player number.
 function readyPlayer(playerNumber) {
-	socket.emit("toggle ready", roomID, playerNumber);
+	socket.emit("toggle ready");
 }
 
 function readyLobby() {
-	socket.emit("start draft", roomID);
+	socket.emit("start draft");
 }
 
 function updateTree(playerNumber, tree, techtree_points) {
-	socket.emit("update tree", roomID, playerNumber, tree);
+	socket.emit("update tree", tree);
 }
 
 function updateCivInfo(playerNumber) {
-	socket.emit("update civ info", roomID, playerNumber, client_alias, client_palette, client_architecture, client_language);
+	socket.emit("update civ info", client_alias, client_palette, client_architecture, client_language);
 }
 
 function endTurn(pick, client_turn) {
-	socket.emit("end turn", roomID, pick, client_turn);
+	socket.emit("end turn", pick, client_turn);
 }
 
 function refillCards() {
-	socket.emit("refill", roomID);
+	socket.emit("refill");
 }
 
 function clearCards() {
-	socket.emit("clear", roomID);
+	socket.emit("clear");
 }
 
 function getPrivateGamestate() {
-	socket.emit("get private gamestate", roomID);
+	socket.emit("get private gamestate");
 }
