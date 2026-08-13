@@ -47,6 +47,9 @@ fs.writeFileSync(path.join(appDir, "public", "vanillaFiles", "empires2_x2_p1.dat
 fs.writeFileSync(path.join(appDir, "public", "img", "thumbnail.jpg"), "stub-jpg");
 
 process.env.NODE_ENV = "test";
+// These suites make hundreds of requests; rate limiting would make results
+// depend on test order. Limiter behaviour is asserted separately.
+process.env.RATE_LIMIT_DISABLED = "true";
 process.env.APP_DIR = appDir;
 process.env.CREATE_DATA_MOD_BIN = stubBin;
 process.env.COOKIE_SECRET = "test-secret-not-used-in-production";

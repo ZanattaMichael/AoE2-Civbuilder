@@ -53,6 +53,10 @@ reports whether it was found.
 | `npm run test:all`      | Run both suites                           |
 | `npm run lint`          | Lint with ESLint                          |
 | `npm run format`        | Format with Prettier                      |
+| `npm run verify`        | Everything CI checks, locally             |
+| `npm run build:native`  | Build the native `create-data-mod` binary |
+| `npm run docker:build`  | Build the container image                 |
+| `npm run docker:run`    | Build and run via docker compose          |
 
 ## Configuration
 
@@ -127,16 +131,38 @@ Two suites, run separately:
   containment, draft rules, seeded generation, HTTP routes and socket
   authorization. Each test process gets an isolated `APP_DIR`.
 - **`npm run test:e2e`** — Playwright. Drives a real browser against a real
-  server: page loading and CSP, mod generation and download, and multiplayer
-  drafting across independent browser contexts.
+  server: page loading and CSP, authoring and exporting a civilization,
+  generating and downloading a mod, every HTTP endpoint, multiplayer drafting
+  across independent browser contexts, and security properties mounted the way
+  an attacker would.
 
-Both stub only the native `create-data-mod` binary; everything else is the
-production code path. To run the E2E suite against a browser already installed
-on the machine rather than one Playwright downloads:
+`tests/exploits.test.js` is an adversarial battery covering command injection,
+path traversal, zip slip, prototype pollution, denial-of-service bounds, header
+injection, authorization bypass and mass assignment. A failure there is a
+security regression.
+
+The fixture stubs only the native `create-data-mod` binary; everything else is
+the production code path. To run the E2E suite against a browser already
+installed on the machine rather than one Playwright downloads:
 
 ```bash
 CHROMIUM_PATH=/path/to/chrome npm run test:e2e
 ```
+
+The same suite can run against a running instance — CI uses this to validate
+the built container image, where the real binary and real game assets are
+present:
+
+```bash
+E2E_BASE_URL=http://127.0.0.1:4000 npm run test:e2e
+```
+
+## Building and releasing
+
+See [docs/RELEASING.md](docs/RELEASING.md). In short: the image is built by CI
+on a self-hosted runner labelled `docker`, and a `v*` tag publishes a versioned
+image to GHCR with an SBOM and build provenance, plus the native binary as a
+release asset.
 
 ## Security
 

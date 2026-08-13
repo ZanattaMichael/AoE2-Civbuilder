@@ -86,6 +86,88 @@ jobs:
             test-results/
           retention-days: 7
 
+  # Runs the same browser suite against the built container image, so the
+  # artifact that ships is validated — real game assets and the real native
+  # create-data-mod binary, not the fixture's stubs.
+  e2e-container:
+    name: End-to-end (container)
+    runs-on: docker
+    needs: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: aoe2-civbuilder:e2e
+          cache-from: type=local,src=/tmp/.buildx-cache
+
+      - name: Start container
+        run: |
+          set -euo pipefail
+          NAME="civbuilder-e2e-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "CONTAINER_NAME=$NAME" >> "$GITHUB_ENV"
+
+          docker run -d --name "$NAME" \
+            -e COOKIE_SECRET=e2e-container-secret \
+            -e PORT=4000 \
+            -e LOG_LEVEL=warn \
+            -e GENERAL_RATE_MAX=100000 \
+            -e MOD_RATE_MAX=10000 \
+            -P \
+            aoe2-civbuilder:e2e
+
+          PORT="$(docker port "$NAME" 4000/tcp | head -1 | sed 's/.*://')"
+          echo "E2E_BASE_URL=http://127.0.0.1:$PORT" >> "$GITHUB_ENV"
+
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:$PORT/civbuilder/healthz" > /dev/null; then
+              echo "Container is healthy on port $PORT"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Container never became healthy"
+          docker logs "$NAME"
+          exit 1
+
+      - name: Run the suite against the container
+        run: npm run test:e2e
+
+      - name: Container logs
+        if: failure()
+        run: docker logs "$CONTAINER_NAME" || true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-container
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      - name: Remove container
+        if: always()
+        run: docker rm -f "${CONTAINER_NAME:-}" 2>/dev/null || true
+
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
@@ -104,7 +186,8 @@ jobs:
 
   docker:
     name: Docker build
-    runs-on: ubuntu-latest
+    # Self-hosted runner labelled 'docker', which has a Docker daemon available.
+    runs-on: docker
     steps:
       - uses: actions/checkout@v4
 
@@ -117,28 +200,64 @@ jobs:
           push: false
           load: true
           tags: aoe2-civbuilder:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # A self-hosted runner has no GitHub Actions cache service, so the
+          # layer cache lives on the runner's own disk instead of type=gha.
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
+      # Keeps the on-disk cache from growing without bound across runs.
+      - name: Rotate build cache
+        if: always()
+        run: |
+          rm -rf /tmp/.buildx-cache
+          if [ -d /tmp/.buildx-cache-new ]; then
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          fi
+
+      # A self-hosted runner may execute jobs concurrently, so the container
+      # name is unique per run and the host port is assigned by Docker.
       - name: Verify the image starts and reports healthy
         run: |
-          docker run -d --name civbuilder \
+          set -euo pipefail
+          NAME="civbuilder-ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "CONTAINER_NAME=$NAME" >> "$GITHUB_ENV"
+
+          docker run -d --name "$NAME" \
             -e COOKIE_SECRET=ci-only-secret \
             -e PORT=4000 \
-            -p 4000:4000 \
+            -P \
             aoe2-civbuilder:ci
 
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4000/civbuilder/healthz > /dev/null; then
+          PORT="$(docker port "$NAME" 4000/tcp | head -1 | sed 's/.*://')"
+          echo "Container published on host port $PORT"
+
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:$PORT/civbuilder/healthz" > /dev/null; then
               echo "Service is up"
-              curl -sS http://127.0.0.1:4000/civbuilder/readyz || true
-              docker rm -f civbuilder
+              curl -sS "http://127.0.0.1:$PORT/civbuilder/readyz"
+
+              # The image must ship a working native binary, not just boot.
+              if ! curl -fsS "http://127.0.0.1:$PORT/civbuilder/readyz" | grep -q '"status":"ready"'; then
+                echo "Image booted but is not ready"
+                exit 1
+              fi
+
+              # The container must not be running as root.
+              USER_ID="$(docker exec "$NAME" id -u)"
+              if [ "$USER_ID" = "0" ]; then
+                echo "Container is running as root"
+                exit 1
+              fi
+              echo "Running as uid $USER_ID"
               exit 0
             fi
             sleep 2
           done
 
           echo "Service failed to become healthy"
-          docker logs civbuilder
-          docker rm -f civbuilder
+          docker logs "$NAME"
           exit 1
+
+      - name: Remove test container
+        if: always()
+        run: docker rm -f "${CONTAINER_NAME:-}" 2>/dev/null || true

@@ -95,6 +95,10 @@ const config = {
 		generalRateMax: Number.parseInt(process.env.GENERAL_RATE_MAX || "300", 10),
 		// Hard ceiling on how long an external command may run.
 		commandTimeoutMs: Number.parseInt(process.env.COMMAND_TIMEOUT_MS || "300000", 10),
+		// Turns rate limiting off outright. Only for test runs that would
+		// otherwise exhaust the budget and see 429s unrelated to what they
+		// assert; never set this in a deployed environment.
+		rateLimitDisabled: process.env.RATE_LIMIT_DISABLED === "true",
 	},
 
 	logLevel: process.env.LOG_LEVEL || (nodeEnv === "test" ? "silent" : "info"),

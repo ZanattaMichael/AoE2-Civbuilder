@@ -1,0 +1,233 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v1.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run format:check
+
+      - run: npm run test:coverage
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
+
+      # A tag must match the version in package.json, or the published image
+      # and the release notes would disagree about what shipped.
+      - name: Check the tag matches package.json
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Tag $TAG does not match package.json version $PKG"
+            exit 1
+          fi
+          echo "Releasing $TAG"
+
+  publish:
+    name: Build and publish image
+    needs: verify
+    # The self-hosted runner labelled 'docker' owns image builds.
+    runs-on: docker
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # A software bill of materials and build provenance, so consumers can
+          # see what is inside the image and where it came from.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=local,src=/tmp/.buildx-cache
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Smoke test the published image
+        run: |
+          set -euo pipefail
+          REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          NAME="civbuilder-release-${{ github.run_id }}"
+
+          docker run -d --name "$NAME" -e COOKIE_SECRET=release-smoke-secret -P "$REF"
+          PORT="$(docker port "$NAME" 4000/tcp | head -1 | sed 's/.*://')"
+
+          for _ in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:$PORT/civbuilder/readyz" | grep -q '"status":"ready"'; then
+              echo "Published image is healthy"
+              docker rm -f "$NAME"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Published image failed its smoke test"
+          docker logs "$NAME"
+          docker rm -f "$NAME"
+          exit 1
+
+  native-binary:
+    name: Build native binary
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential cmake libjsoncpp-dev zlib1g-dev \
+            liblz4-dev libboost-iostreams-dev
+
+      - name: Build create-data-mod
+        run: ./modding/scripts/build.sh
+
+      - name: Package the binary
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp modding/build/create-data-mod dist/
+          cd dist
+          tar -czf "create-data-mod-linux-x86_64.tar.gz" create-data-mod
+          sha256sum "create-data-mod-linux-x86_64.tar.gz" > "create-data-mod-linux-x86_64.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-binary
+          path: |
+            dist/create-data-mod-linux-x86_64.tar.gz
+            dist/create-data-mod-linux-x86_64.tar.gz.sha256
+          retention-days: 30
+
+  github-release:
+    name: Publish GitHub release
+    needs: [publish, native-binary]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-binary
+          path: dist
+
+      - name: Assemble release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
+          PREVIOUS="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+
+          {
+            echo "## Container image"
+            echo
+            echo '```'
+            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG#v}"
+            echo '```'
+            echo
+            echo "Digest: \`${{ needs.publish.outputs.digest }}\`"
+            echo
+            echo "## Changes"
+            echo
+            if [ -n "$PREVIOUS" ]; then
+              git log --no-merges --pretty='- %s (%h)' "$PREVIOUS..$TAG"
+            else
+              git log --no-merges --pretty='- %s (%h)' "$TAG"
+            fi
+          } > release-notes.md
+
+          cat release-notes.md
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            dist/create-data-mod-linux-x86_64.tar.gz
+            dist/create-data-mod-linux-x86_64.tar.gz.sha256
+          draft: false
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}

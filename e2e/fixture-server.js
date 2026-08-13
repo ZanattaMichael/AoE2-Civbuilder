@@ -89,6 +89,11 @@ if (require.main === module) {
 	process.env.PORT = process.env.PORT || "4599";
 	process.env.PUBLIC_URL = `http://127.0.0.1:${process.env.PORT}/civbuilder`;
 	process.env.LOG_LEVEL = process.env.LOG_LEVEL || "warn";
+	// Rate limiting stays enabled so the real middleware runs, but the ceiling
+	// is raised: a browser suite makes far more requests than a person, and
+	// missing fixture art 404s through to the limited router.
+	process.env.GENERAL_RATE_MAX = process.env.GENERAL_RATE_MAX || "100000";
+	process.env.MOD_RATE_MAX = process.env.MOD_RATE_MAX || "10000";
 	process.env.CREATE_DATA_MOD_BIN = path.join(appDir, "modding", "build", "create-data-mod");
 
 	console.log(`e2e fixture APP_DIR=${appDir}`);

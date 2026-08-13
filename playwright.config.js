@@ -3,7 +3,15 @@
 const { defineConfig, devices } = require("@playwright/test");
 
 const PORT = process.env.E2E_PORT || "4599";
-const BASE_URL = `http://127.0.0.1:${PORT}`;
+
+/**
+ * Set E2E_BASE_URL to run the suite against an already-running instance —
+ * notably the built container image, which exercises the real native
+ * create-data-mod binary and the real game assets rather than the fixture's
+ * stubs. When it is set, Playwright does not start a server of its own.
+ */
+const EXTERNAL_URL = process.env.E2E_BASE_URL;
+const BASE_URL = EXTERNAL_URL || `http://127.0.0.1:${PORT}`;
 
 /**
  * End-to-end configuration.
@@ -50,18 +58,21 @@ module.exports = defineConfig({
 		},
 	],
 
-	webServer: {
-		command: `node e2e/fixture-server.js`,
-		url: `${BASE_URL}/civbuilder/healthz`,
-		reuseExistingServer: !process.env.CI,
-		timeout: 60000,
-		env: {
-			PORT,
-			NODE_ENV: "development",
-			COOKIE_SECRET: "e2e-fixture-secret",
-			LOG_LEVEL: process.env.E2E_LOG_LEVEL || "warn",
-		},
-		stdout: "pipe",
-		stderr: "pipe",
-	},
+	// Skipped entirely when pointing at an external instance.
+	webServer: EXTERNAL_URL
+		? undefined
+		: {
+				command: `node e2e/fixture-server.js`,
+				url: `${BASE_URL}/civbuilder/healthz`,
+				reuseExistingServer: !process.env.CI,
+				timeout: 60000,
+				env: {
+					PORT,
+					NODE_ENV: "development",
+					COOKIE_SECRET: "e2e-fixture-secret",
+					LOG_LEVEL: process.env.E2E_LOG_LEVEL || "warn",
+				},
+				stdout: "pipe",
+				stderr: "pipe",
+			},
 });

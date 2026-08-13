@@ -18,8 +18,8 @@ const modRateLimiter = rateLimit({
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many mod generation requests, please try again later" },
-	// Disabled under test so integration tests are not order-dependent.
-	skip: () => config.isTest,
+	// Opt-in bypass for test runs; see config.limits.rateLimitDisabled.
+	skip: () => config.limits.rateLimitDisabled,
 });
 
 const generalRateLimiter = rateLimit({
@@ -28,7 +28,7 @@ const generalRateLimiter = rateLimit({
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { error: "Too many requests, please try again later" },
-	skip: () => config.isTest,
+	skip: () => config.limits.rateLimitDisabled,
 });
 
 module.exports = { modRateLimiter, generalRateLimiter };
