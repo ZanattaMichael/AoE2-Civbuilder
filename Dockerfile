@@ -32,6 +32,11 @@ ARG GENIEUTILS_REF=d35204a8b02c3ab5bd3d07c88668d73cefa3bad4
 RUN git clone "${GENIEUTILS_REPO}" genieutils \
     && git -C genieutils checkout --detach "${GENIEUTILS_REF}"
 
+# genieutils compiles ../pcrio/pcrio.c from a sibling directory, so pcrio must
+# sit alongside the genieutils checkout even though this repo's own CMakeLists
+# does not mention it.
+COPY modding/pcrio ./pcrio
+
 # jsoncpp is linked from the system package (-ljsoncpp), not vendored.
 COPY modding/CMakeLists.txt ./
 COPY modding/create-data-mod.cpp modding/civbuilder.cpp modding/civbuilder.h ./
