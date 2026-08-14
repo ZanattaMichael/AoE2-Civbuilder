@@ -31,4 +31,18 @@ const generalRateLimiter = rateLimit({
 	skip: () => config.limits.rateLimitDisabled,
 });
 
-module.exports = { modRateLimiter, generalRateLimiter };
+/**
+ * Health probes get their own generous limit. They must stay available to an
+ * orchestrator polling every few seconds, but they are unauthenticated and do
+ * touch the filesystem, so they are not left entirely unbounded.
+ */
+const healthRateLimiter = rateLimit({
+	windowMs: 60 * 1000,
+	max: Number.parseInt(process.env.HEALTH_RATE_MAX || "600", 10),
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { error: "Too many health check requests" },
+	skip: () => config.limits.rateLimitDisabled,
+});
+
+module.exports = { modRateLimiter, generalRateLimiter, healthRateLimiter };

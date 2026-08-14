@@ -8,7 +8,7 @@ const archiver = require("archiver");
 
 const config = require("../config");
 const logger = require("../logger");
-const { modPaths } = require("./paths");
+const { modPaths, resolveWithin } = require("./paths");
 
 /**
  * Creates the on-disk skeleton of a generated mod.
@@ -151,9 +151,22 @@ async function copyTechtreeButtons(seed) {
 	await copyDirContents(paths.techtreeButtons, paths.uiTechtreeIcons);
 }
 
+/**
+ * Packages selected entries of a directory into a zip.
+ *
+ * Both the source and the destination are re-confined to the generated-mods
+ * root before any filesystem call. Callers already pass paths built by
+ * paths.modPaths() from a validated seed, so this is defence in depth — and it
+ * keeps the guarantee local to the code that touches the disk rather than
+ * spread across the call chain.
+ */
 function zipDirectory(sourceDir, outFile, entries) {
+	const root = config.dirs.requestedMods;
+	const safeSourceDir = resolveWithin(root, sourceDir);
+	const safeOutFile = resolveWithin(root, outFile);
+
 	return new Promise((resolve, reject) => {
-		const output = fsSync.createWriteStream(outFile);
+		const output = fsSync.createWriteStream(safeOutFile);
 		const archive = archiver("zip", { zlib: { level: 9 } });
 
 		output.on("close", resolve);
@@ -169,7 +182,9 @@ function zipDirectory(sourceDir, outFile, entries) {
 
 		archive.pipe(output);
 		for (const entry of entries) {
-			const full = path.join(sourceDir, entry);
+			// Entry names are fixed literals or seed-derived, but each is still
+			// confined before it reaches the filesystem.
+			const full = resolveWithin(safeSourceDir, entry);
 			if (!fsSync.existsSync(full)) {
 				continue;
 			}
