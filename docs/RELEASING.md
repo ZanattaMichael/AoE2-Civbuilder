@@ -81,8 +81,18 @@ for a scheduled release.
 
 ## Runners
 
-Image builds run on the self-hosted runner labelled `docker`, which provides
-the Docker daemon. Everything else runs on GitHub-hosted `ubuntu-latest`.
+Image builds run on a self-hosted runner that provides a Docker daemon.
+Everything else runs on GitHub-hosted `ubuntu-latest`.
+
+The runner is selected by label, defaulting to `docker`. If your runner is
+registered under a different label, set the repository variable
+`DOCKER_RUNNER_LABEL` (Settings → Secrets and variables → Actions → Variables)
+rather than editing each workflow.
+
+If those jobs sit in `queued` and never start, no online runner carries the
+label. Check Settings → Actions → Runners: the runner must be **idle** (not
+offline), carry the expected label, and — if it belongs to a runner group — the
+group must grant access to this repository.
 
 Because a self-hosted runner may execute jobs concurrently and keeps state
 between runs:

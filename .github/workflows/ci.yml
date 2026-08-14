@@ -91,7 +91,10 @@ jobs:
   # create-data-mod binary, not the fixture's stubs.
   e2e-container:
     name: End-to-end (container)
-    runs-on: docker
+    # Self-hosted runner that provides a Docker daemon. Override the label by
+    # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
+    # registered under a different one.
+    runs-on: ${{ vars.DOCKER_RUNNER_LABEL || 'docker' }}
     needs: docker
     steps:
       - uses: actions/checkout@v4
@@ -186,8 +189,10 @@ jobs:
 
   docker:
     name: Docker build
-    # Self-hosted runner labelled 'docker', which has a Docker daemon available.
-    runs-on: docker
+    # Self-hosted runner that provides a Docker daemon. Override the label by
+    # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
+    # registered under a different one.
+    runs-on: ${{ vars.DOCKER_RUNNER_LABEL || 'docker' }}
     steps:
       - uses: actions/checkout@v4
 

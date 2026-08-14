@@ -105,8 +105,10 @@ jobs:
 
   image-scan:
     name: Container image scan
-    # Built and scanned on the runner that has Docker.
-    runs-on: docker
+    # Self-hosted runner that provides a Docker daemon. Override the label by
+    # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
+    # registered under a different one.
+    runs-on: ${{ vars.DOCKER_RUNNER_LABEL || 'docker' }}
     permissions:
       contents: read
       security-events: write
