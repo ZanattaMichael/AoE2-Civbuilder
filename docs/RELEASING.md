@@ -84,15 +84,15 @@ for a scheduled release.
 Image builds run on a self-hosted runner that provides a Docker daemon.
 Everything else runs on GitHub-hosted `ubuntu-latest`.
 
-The runner is selected by label, defaulting to `docker`. If your runner is
-registered under a different label, set the repository variable
-`DOCKER_RUNNER_LABEL` (Settings → Secrets and variables → Actions → Variables)
-rather than editing each workflow.
+Those jobs target `runs-on: [self-hosted, linux]`. If they sit in `queued` and
+never start, no online runner carries both labels — check Settings → Actions →
+Runners: the runner must be **idle** (not offline), and if it belongs to a
+runner group, the group must grant access to this repository.
 
-If those jobs sit in `queued` and never start, no online runner carries the
-label. Check Settings → Actions → Runners: the runner must be **idle** (not
-offline), carry the expected label, and — if it belongs to a runner group — the
-group must grant access to this repository.
+The runner needs a Docker daemon but **not** passwordless sudo. Nothing is
+installed onto the host: the container end-to-end job runs the browser from the
+official `mcr.microsoft.com/playwright` image, attached to the same
+user-defined bridge network as the application container.
 
 Because a self-hosted runner may execute jobs concurrently and keeps state
 between runs:

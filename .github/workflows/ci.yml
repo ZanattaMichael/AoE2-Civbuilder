@@ -91,9 +91,7 @@ jobs:
   # create-data-mod binary, not the fixture's stubs.
   e2e-container:
     name: End-to-end (container)
-    # Self-hosted runner that provides a Docker daemon. Override the label by
-    # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
-    # registered under a different one.
+    # Self-hosted Linux runner, which provides the Docker daemon these jobs need.
     runs-on: [self-hosted, linux]
     needs: docker
     steps:
@@ -104,10 +102,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # Only the JavaScript dependencies are installed on the runner; the
+      # browser comes from the Playwright image below, so nothing has to be
+      # installed into the host.
       - run: npm ci
-
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
 
       - uses: docker/setup-buildx-action@v3
 
@@ -120,27 +118,32 @@ jobs:
           tags: aoe2-civbuilder:e2e
           cache-from: type=local,src=/tmp/.buildx-cache
 
+      # The app and the browser talk over a user-defined bridge network, so
+      # neither needs a published host port — which also keeps concurrent runs
+      # on this runner from colliding.
       - name: Start container
         run: |
           set -euo pipefail
-          NAME="civbuilder-e2e-${{ github.run_id }}-${{ github.run_attempt }}"
+          SUFFIX="${{ github.run_id }}-${{ github.run_attempt }}"
+          NET="civbuilder-net-$SUFFIX"
+          NAME="civbuilder-e2e-$SUFFIX"
+          echo "NETWORK_NAME=$NET" >> "$GITHUB_ENV"
           echo "CONTAINER_NAME=$NAME" >> "$GITHUB_ENV"
 
-          docker run -d --name "$NAME" \
+          docker network create "$NET"
+
+          docker run -d --name "$NAME" --network "$NET" \
             -e COOKIE_SECRET=e2e-container-secret \
             -e PORT=4000 \
             -e LOG_LEVEL=warn \
             -e GENERAL_RATE_MAX=100000 \
             -e MOD_RATE_MAX=10000 \
-            -P \
             aoe2-civbuilder:e2e
 
-          PORT="$(docker port "$NAME" 4000/tcp | head -1 | sed 's/.*://')"
-          echo "E2E_BASE_URL=http://127.0.0.1:$PORT" >> "$GITHUB_ENV"
-
           for _ in $(seq 1 60); do
-            if curl -fsS "http://127.0.0.1:$PORT/civbuilder/healthz" > /dev/null; then
-              echo "Container is healthy on port $PORT"
+            if docker run --rm --network "$NET" curlimages/curl:latest \
+                 -fsS "http://$NAME:4000/civbuilder/healthz" > /dev/null 2>&1; then
+              echo "Container is healthy"
               exit 0
             fi
             sleep 2
@@ -150,8 +153,24 @@ jobs:
           docker logs "$NAME"
           exit 1
 
+      # Playwright runs from its official image rather than on the runner: the
+      # `--with-deps` install needs root to apt-get Chromium's libraries, and
+      # this runner has no passwordless sudo. The image already carries the
+      # browser and those libraries, so the host is left untouched.
       - name: Run the suite against the container
-        run: npm run test:e2e
+        run: |
+          set -euo pipefail
+          PW_VERSION="$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
+          echo "Using Playwright image v$PW_VERSION"
+
+          docker run --rm --network "$NETWORK_NAME" \
+            -v "$PWD":/work -w /work \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e CI=true \
+            -e E2E_BASE_URL="http://$CONTAINER_NAME:4000" \
+            "mcr.microsoft.com/playwright:v$PW_VERSION-noble" \
+            npx playwright test
 
       - name: Container logs
         if: failure()
@@ -167,9 +186,11 @@ jobs:
             test-results/
           retention-days: 7
 
-      - name: Remove container
+      - name: Remove container and network
         if: always()
-        run: docker rm -f "${CONTAINER_NAME:-}" 2>/dev/null || true
+        run: |
+          docker rm -f "${CONTAINER_NAME:-}" 2>/dev/null || true
+          docker network rm "${NETWORK_NAME:-}" 2>/dev/null || true
 
   audit:
     name: Dependency audit
@@ -189,10 +210,8 @@ jobs:
 
   docker:
     name: Docker build
-    # Self-hosted runner that provides a Docker daemon. Override the label by
-    # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
-    # registered under a different one.
-    runs-on: ${{ vars.DOCKER_RUNNER_LABEL || 'docker' }}
+    # Self-hosted Linux runner, which provides the Docker daemon these jobs need.
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
 

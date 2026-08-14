@@ -61,10 +61,8 @@ jobs:
   publish:
     name: Build and publish image
     needs: verify
-    # Self-hosted runner that provides a Docker daemon. Override the label by
-    # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
-    # registered under a different one.
-    runs-on: ${{ vars.DOCKER_RUNNER_LABEL || 'docker' }}
+    # Self-hosted Linux runner, which provides the Docker daemon these jobs need.
+    runs-on: [self-hosted, linux]
     permissions:
       contents: read
       packages: write
