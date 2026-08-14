@@ -1,5 +1,6 @@
 "use strict";
 
+const config = require("../config");
 const drafts = require("../services/drafts");
 const { isValidDraftId } = require("../validation");
 
@@ -27,7 +28,9 @@ function setSeatCookie(res, draftId, token) {
 		httpOnly: true,
 		signed: true,
 		sameSite: "lax",
-		secure: process.env.NODE_ENV === "production",
+		// Over plain HTTP a `secure` cookie is discarded by the browser, so the
+		// player would silently hold no seat; see config.behindTls.
+		secure: config.behindTls,
 		maxAge: 24 * 60 * 60 * 1000,
 	};
 	res.cookie(SEAT_COOKIE, token, options);

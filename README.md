@@ -63,22 +63,29 @@ reports whether it was found.
 All configuration is environment-driven; see `.env.example` for the full list.
 The ones that matter most:
 
-| Variable                        | Default                            | Notes                                                |
-| ------------------------------- | ---------------------------------- | ---------------------------------------------------- |
-| `COOKIE_SECRET`                 | —                                  | **Required in production.** Signs seat cookies.      |
-| `PORT`                          | `4000`                             | Listen port                                          |
-| `APP_DIR`                       | repository root                    | Root for all derived paths                           |
-| `BASE_PATH`                     | `/civbuilder`                      | Path prefix the app is mounted under                 |
-| `PUBLIC_URL`                    | `http://localhost:4000/civbuilder` | Used to build draft invite links                     |
-| `CORS_ORIGINS`                  | empty                              | Comma-separated allowed origins; empty = same-origin |
-| `CSP_UPGRADE_INSECURE_REQUESTS` | `true`                             | Set `false` when served over plain HTTP by hostname  |
+| Variable        | Default                            | Notes                                                |
+| --------------- | ---------------------------------- | ---------------------------------------------------- |
+| `COOKIE_SECRET` | —                                  | **Required in production.** Signs seat cookies.      |
+| `PORT`          | `4000`                             | Listen port                                          |
+| `APP_DIR`       | repository root                    | Root for all derived paths                           |
+| `BASE_PATH`     | `/civbuilder`                      | Path prefix the app is mounted under                 |
+| `PUBLIC_URL`    | `http://localhost:4000/civbuilder` | Used to build draft invite links                     |
+| `CORS_ORIGINS`  | empty                              | Comma-separated allowed origins; empty = same-origin |
+| `BEHIND_TLS`    | `true` in production               | Whether browsers reach the app over HTTPS            |
 
-`CSP_UPGRADE_INSECURE_REQUESTS` deserves a word. Left on, the browser rewrites
-this origin's `http://` subresource requests to `https://` — right behind the
-TLS-terminating proxy the site normally runs behind, and fatal without one:
-every stylesheet and script fails the TLS handshake and the pages render dead.
-Loopback is exempt from the upgrade, so a `localhost` smoke test will not show
-the problem; reaching the app by hostname over plain HTTP will.
+`BEHIND_TLS` deserves a word. It says whether browsers reach the app over
+HTTPS — directly, or through the TLS-terminating proxy the site is normally
+deployed behind. Two things hang off it, and both are right under TLS and
+fatal without it:
+
+- the seat cookies are marked `secure`, so over plain HTTP the browser
+  discards them and nobody can hold a draft seat;
+- CSP's `upgrade-insecure-requests` is emitted, so over plain HTTP the browser
+  rewrites every subresource URL to `https://` (and `ws://` to `wss://`), the
+  assets fail the TLS handshake, and the pages render dead.
+
+Loopback is exempt from both, so a `localhost` smoke test cannot tell the two
+settings apart. Reaching the app by hostname over plain HTTP can.
 
 ## Architecture
 

@@ -49,9 +49,9 @@ function createApp() {
 					objectSrc: ["'none'"],
 					frameAncestors: ["'none'"],
 					// helmet turns this on by default. `null` removes an inherited
-					// default directive; see config.upgradeInsecureRequests for why a
-					// plain-HTTP deployment has to be able to switch it off.
-					...(config.upgradeInsecureRequests ? {} : { upgradeInsecureRequests: null }),
+					// default directive; see config.behindTls for why a plain-HTTP
+					// deployment has to be able to switch it off.
+					...(config.behindTls ? {} : { upgradeInsecureRequests: null }),
 				},
 			},
 			// The site serves game assets to the page itself; the default

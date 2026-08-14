@@ -64,13 +64,21 @@ const config = {
 	// Comma-separated list of allowed browser origins. Empty means same-origin only.
 	corsOrigins: parseOrigins(process.env.CORS_ORIGINS),
 
-	// Emit CSP's `upgrade-insecure-requests`, which makes the browser rewrite
-	// this origin's http:// subresource requests to https://. Correct behind the
-	// TLS-terminating proxy the site runs behind, and wrong for a deployment
-	// reached over plain HTTP by hostname: every stylesheet and script would
-	// fail the TLS handshake and the pages would render dead. Loopback is exempt
-	// from the upgrade, so the breakage only shows up off localhost.
-	upgradeInsecureRequests: process.env.CSP_UPGRADE_INSECURE_REQUESTS !== "false",
+	// Whether the browser reaches this app over HTTPS — directly, or through a
+	// TLS-terminating proxy, which is how the site is deployed.
+	//
+	// Two behaviours hang off this, and both are correct under TLS and fatal
+	// without it:
+	//
+	//   - `secure` on the seat cookies. Over plain HTTP the browser discards
+	//     them outright, so nobody can hold a draft seat.
+	//   - CSP's `upgrade-insecure-requests`, which rewrites this origin's http://
+	//     subresource requests to https:// (and ws:// to wss://). Over plain HTTP
+	//     every asset then fails the TLS handshake and the pages render dead.
+	//
+	// Loopback is exempt from both, so a localhost smoke test cannot tell the
+	// settings apart; only reaching the app by hostname over plain HTTP can.
+	behindTls: process.env.BEHIND_TLS ? process.env.BEHIND_TLS === "true" : nodeEnv === "production",
 
 	dirs: {
 		app: appDir,
