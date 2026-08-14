@@ -48,6 +48,10 @@ function createApp() {
 					connectSrc: ["'self'", "ws:", "wss:"],
 					objectSrc: ["'none'"],
 					frameAncestors: ["'none'"],
+					// helmet turns this on by default. `null` removes an inherited
+					// default directive; see config.upgradeInsecureRequests for why a
+					// plain-HTTP deployment has to be able to switch it off.
+					...(config.upgradeInsecureRequests ? {} : { upgradeInsecureRequests: null }),
 				},
 			},
 			// The site serves game assets to the page itself; the default

@@ -64,6 +64,14 @@ const config = {
 	// Comma-separated list of allowed browser origins. Empty means same-origin only.
 	corsOrigins: parseOrigins(process.env.CORS_ORIGINS),
 
+	// Emit CSP's `upgrade-insecure-requests`, which makes the browser rewrite
+	// this origin's http:// subresource requests to https://. Correct behind the
+	// TLS-terminating proxy the site runs behind, and wrong for a deployment
+	// reached over plain HTTP by hostname: every stylesheet and script would
+	// fail the TLS handshake and the pages would render dead. Loopback is exempt
+	// from the upgrade, so the breakage only shows up off localhost.
+	upgradeInsecureRequests: process.env.CSP_UPGRADE_INSECURE_REQUESTS !== "false",
+
 	dirs: {
 		app: appDir,
 		public: path.join(appDir, "public"),

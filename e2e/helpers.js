@@ -57,6 +57,17 @@ function isFixtureArt(url) {
 }
 
 /**
+ * Chromium treats a plain-HTTP origin that is not loopback as untrustworthy and
+ * logs an error for every HTTPS-only response header it therefore ignores. That
+ * is a property of how the suite reaches the target — the container run talks to
+ * the app by container name over HTTP — not a defect in the headers, which are
+ * correct behind the TLS-terminating proxy the site is deployed behind.
+ */
+function isUntrustworthyOriginAdvisory(text) {
+	return /header has been ignored, because the URL's origin was untrustworthy/.test(text);
+}
+
+/**
  * Records console errors, page errors and failed requests for a page.
  *
  * Returns an object whose arrays fill as the page runs; assert on them after
@@ -77,6 +88,9 @@ function collectPageProblems(page, { ignoreMissingArt = true } = {}) {
 		// A resource 404 also emits a generic console error with the failing
 		// request as its location; classify those alongside the response.
 		if (skip(url)) {
+			return;
+		}
+		if (isUntrustworthyOriginAdvisory(message.text())) {
 			return;
 		}
 		problems.consoleErrors.push(message.text());

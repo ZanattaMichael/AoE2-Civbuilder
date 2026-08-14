@@ -120,7 +120,10 @@ jobs:
 
       # The app and the browser talk over a user-defined bridge network, so
       # neither needs a published host port — which also keeps concurrent runs
-      # on this runner from colliding.
+      # on this runner from colliding. The browser reaches the app over plain
+      # HTTP by container name, so CSP's upgrade-insecure-requests is switched
+      # off; left on, Chromium rewrites every subresource URL to https:// and
+      # the whole page fails the TLS handshake.
       - name: Start container
         run: |
           set -euo pipefail
@@ -138,6 +141,7 @@ jobs:
             -e LOG_LEVEL=warn \
             -e GENERAL_RATE_MAX=100000 \
             -e MOD_RATE_MAX=10000 \
+            -e CSP_UPGRADE_INSECURE_REQUESTS=false \
             aoe2-civbuilder:e2e
 
           for _ in $(seq 1 60); do

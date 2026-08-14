@@ -18,6 +18,9 @@ services:
       # actions. Generate with: openssl rand -hex 32
       COOKIE_SECRET: ${COOKIE_SECRET:?COOKIE_SECRET must be set}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Set to false when the app is served over plain HTTP by hostname, or the
+      # browser upgrades every subresource to https:// and the pages break.
+      CSP_UPGRADE_INSECURE_REQUESTS: ${CSP_UPGRADE_INSECURE_REQUESTS:-true}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
     volumes:

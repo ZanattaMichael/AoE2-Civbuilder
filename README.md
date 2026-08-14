@@ -63,14 +63,22 @@ reports whether it was found.
 All configuration is environment-driven; see `.env.example` for the full list.
 The ones that matter most:
 
-| Variable        | Default                            | Notes                                                |
-| --------------- | ---------------------------------- | ---------------------------------------------------- |
-| `COOKIE_SECRET` | —                                  | **Required in production.** Signs seat cookies.      |
-| `PORT`          | `4000`                             | Listen port                                          |
-| `APP_DIR`       | repository root                    | Root for all derived paths                           |
-| `BASE_PATH`     | `/civbuilder`                      | Path prefix the app is mounted under                 |
-| `PUBLIC_URL`    | `http://localhost:4000/civbuilder` | Used to build draft invite links                     |
-| `CORS_ORIGINS`  | empty                              | Comma-separated allowed origins; empty = same-origin |
+| Variable                        | Default                            | Notes                                                |
+| ------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `COOKIE_SECRET`                 | —                                  | **Required in production.** Signs seat cookies.      |
+| `PORT`                          | `4000`                             | Listen port                                          |
+| `APP_DIR`                       | repository root                    | Root for all derived paths                           |
+| `BASE_PATH`                     | `/civbuilder`                      | Path prefix the app is mounted under                 |
+| `PUBLIC_URL`                    | `http://localhost:4000/civbuilder` | Used to build draft invite links                     |
+| `CORS_ORIGINS`                  | empty                              | Comma-separated allowed origins; empty = same-origin |
+| `CSP_UPGRADE_INSECURE_REQUESTS` | `true`                             | Set `false` when served over plain HTTP by hostname  |
+
+`CSP_UPGRADE_INSECURE_REQUESTS` deserves a word. Left on, the browser rewrites
+this origin's `http://` subresource requests to `https://` — right behind the
+TLS-terminating proxy the site normally runs behind, and fatal without one:
+every stylesheet and script fails the TLS handshake and the pages render dead.
+Loopback is exempt from the upgrade, so a `localhost` smoke test will not show
+the problem; reaching the app by hostname over plain HTTP will.
 
 ## Architecture
 
