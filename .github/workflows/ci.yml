@@ -94,7 +94,7 @@ jobs:
     # Self-hosted runner that provides a Docker daemon. Override the label by
     # setting the DOCKER_RUNNER_LABEL repository variable if the runner is
     # registered under a different one.
-    runs-on: ${{ vars.DOCKER_RUNNER_LABEL || 'docker' }}
+    runs-on: [self-hosted, linux]
     needs: docker
     steps:
       - uses: actions/checkout@v4
