@@ -1,0 +1,291 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # canvas ships prebuilt binaries, but nothing in lint or test needs them
+      # to be executable, so build scripts are skipped for speed.
+      - run: npm ci --ignore-scripts
+
+      - run: npm run lint
+
+      - run: npm run format:check
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  e2e:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Installs the browser build matching the pinned Playwright version,
+      # along with the system libraries Chromium needs on a bare runner.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  # Runs the same browser suite against the built container image, so the
+  # artifact that ships is validated — real game assets and the real native
+  # create-data-mod binary, not the fixture's stubs.
+  e2e-container:
+    name: End-to-end (container)
+    # Self-hosted Linux runner, which provides the Docker daemon these jobs need.
+    runs-on: [self-hosted, linux]
+    needs: docker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Only the JavaScript dependencies are installed on the runner; the
+      # browser comes from the Playwright image below, so nothing has to be
+      # installed into the host.
+      - run: npm ci
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: aoe2-civbuilder:e2e
+          cache-from: type=local,src=/tmp/.buildx-cache
+
+      # The app and the browser talk over a user-defined bridge network, so
+      # neither needs a published host port — which also keeps concurrent runs
+      # on this runner from colliding. The browser reaches the app over plain
+      # HTTP by container name rather than through a TLS-terminating proxy, so
+      # BEHIND_TLS is off: otherwise Chromium rewrites every subresource URL to
+      # https:// and discards the `secure` seat cookies.
+      - name: Start container
+        run: |
+          set -euo pipefail
+          SUFFIX="${{ github.run_id }}-${{ github.run_attempt }}"
+          NET="civbuilder-net-$SUFFIX"
+          NAME="civbuilder-e2e-$SUFFIX"
+          echo "NETWORK_NAME=$NET" >> "$GITHUB_ENV"
+          echo "CONTAINER_NAME=$NAME" >> "$GITHUB_ENV"
+
+          docker network create "$NET"
+
+          docker run -d --name "$NAME" --network "$NET" \
+            -e COOKIE_SECRET=e2e-container-secret \
+            -e PORT=4000 \
+            -e LOG_LEVEL=warn \
+            -e GENERAL_RATE_MAX=100000 \
+            -e MOD_RATE_MAX=10000 \
+            -e BEHIND_TLS=false \
+            aoe2-civbuilder:e2e
+
+          for _ in $(seq 1 60); do
+            if docker run --rm --network "$NET" curlimages/curl:latest \
+                 -fsS "http://$NAME:4000/civbuilder/healthz" > /dev/null 2>&1; then
+              echo "Container is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Container never became healthy"
+          docker logs "$NAME"
+          exit 1
+
+      # Playwright runs from its official image rather than on the runner: the
+      # `--with-deps` install needs root to apt-get Chromium's libraries, and
+      # this runner has no passwordless sudo. The image already carries the
+      # browser and those libraries, so the host is left untouched.
+      - name: Run the suite against the container
+        run: |
+          set -euo pipefail
+          PW_VERSION="$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
+          echo "Using Playwright image v$PW_VERSION"
+
+          docker run --rm --network "$NETWORK_NAME" \
+            -v "$PWD":/work -w /work \
+            -u "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -e CI=true \
+            -e E2E_BASE_URL="http://$CONTAINER_NAME:4000" \
+            "mcr.microsoft.com/playwright:v$PW_VERSION-noble" \
+            npx playwright test
+
+      - name: Container logs
+        if: failure()
+        run: docker logs "$CONTAINER_NAME" || true
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-container
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      - name: Remove container and network
+        if: always()
+        run: |
+          docker rm -f "${CONTAINER_NAME:-}" 2>/dev/null || true
+          docker network rm "${NETWORK_NAME:-}" 2>/dev/null || true
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      # Fails the build on a known-vulnerable production dependency.
+      - run: npm audit --audit-level=high --omit=dev
+
+  docker:
+    name: Docker build
+    # Self-hosted Linux runner, which provides the Docker daemon these jobs need.
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: aoe2-civbuilder:ci
+          # A self-hosted runner has no GitHub Actions cache service, so the
+          # layer cache lives on the runner's own disk instead of type=gha.
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      # Keeps the on-disk cache from growing without bound across runs.
+      - name: Rotate build cache
+        if: always()
+        run: |
+          rm -rf /tmp/.buildx-cache
+          if [ -d /tmp/.buildx-cache-new ]; then
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          fi
+
+      # A self-hosted runner may execute jobs concurrently, so the container
+      # name is unique per run and the host port is assigned by Docker.
+      - name: Verify the image starts and reports healthy
+        run: |
+          set -euo pipefail
+          NAME="civbuilder-ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "CONTAINER_NAME=$NAME" >> "$GITHUB_ENV"
+
+          docker run -d --name "$NAME" \
+            -e COOKIE_SECRET=ci-only-secret \
+            -e PORT=4000 \
+            -P \
+            aoe2-civbuilder:ci
+
+          PORT="$(docker port "$NAME" 4000/tcp | head -1 | sed 's/.*://')"
+          echo "Container published on host port $PORT"
+
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:$PORT/civbuilder/healthz" > /dev/null; then
+              echo "Service is up"
+              curl -sS "http://127.0.0.1:$PORT/civbuilder/readyz"
+
+              # The image must ship a working native binary, not just boot.
+              if ! curl -fsS "http://127.0.0.1:$PORT/civbuilder/readyz" | grep -q '"status":"ready"'; then
+                echo "Image booted but is not ready"
+                exit 1
+              fi
+
+              # The container must not be running as root.
+              USER_ID="$(docker exec "$NAME" id -u)"
+              if [ "$USER_ID" = "0" ]; then
+                echo "Container is running as root"
+                exit 1
+              fi
+              echo "Running as uid $USER_ID"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Service failed to become healthy"
+          docker logs "$NAME"
+          exit 1
+
+      - name: Remove test container
+        if: always()
+        run: docker rm -f "${CONTAINER_NAME:-}" 2>/dev/null || true

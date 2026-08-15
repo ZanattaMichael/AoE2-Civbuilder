@@ -1,0 +1,151 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so advisories published after a merge are still caught.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Gitleaks needs history to scan commits, not just the tree.
+          fetch-depth: 0
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Blocks a pull request that introduces a vulnerable dependency, which npm
+      # audit alone would not attribute to the change.
+      #
+      # Scoped to runtime dependencies so this gate matches `npm audit
+      # --omit=dev`: only what actually ships can fail the build. Advisories in
+      # build and test tooling are still reported in the PR summary, where they
+      # can be judged on their own terms rather than blocking a merge.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          comment-summary-in-pr: on-failure
+
+  exploit-tests:
+    name: Exploit validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # The adversarial battery: injection, traversal, prototype pollution,
+      # DoS bounds, authorization bypass and header injection.
+      - run: npx vitest run tests/exploits.test.js
+
+  filesystem-scan:
+    name: Filesystem vulnerability scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Trivy is run from its official image rather than the marketplace action:
+      # one less action version to track, and the scanner picks up its own
+      # vulnerability database on each run.
+      - name: Scan dependencies and configuration
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" \
+            -v /tmp/trivy-cache:/root/.cache/trivy \
+            aquasec/trivy:latest fs /src \
+            --scanners vuln,secret,misconfig \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            --output /src/trivy-fs.sarif \
+            --exit-code 0 \
+            --no-progress
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  image-scan:
+    name: Container image scan
+    # Self-hosted Linux runner, which provides the Docker daemon these jobs need.
+    runs-on: [self-hosted, linux]
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: aoe2-civbuilder:scan
+          cache-from: type=local,src=/tmp/.buildx-cache
+
+      # Reported rather than blocking: base image advisories appear between
+      # releases and are fixed by a rebuild, not by a code change.
+      - name: Scan image for known vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/out" \
+            -v /tmp/trivy-cache:/root/.cache/trivy \
+            aquasec/trivy:latest image aoe2-civbuilder:scan \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            --output /out/trivy-image.sarif \
+            --exit-code 0 \
+            --no-progress
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      - name: Remove scan image
+        if: always()
+        run: docker image rm -f aoe2-civbuilder:scan || true

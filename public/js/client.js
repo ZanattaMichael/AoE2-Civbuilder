@@ -376,8 +376,12 @@ function startaBuild() {
 			async function onReaderLoad(event) {
 				var civ = JSON.parse(event.target.result);
 				if (civ["customFlag"] && civ["customFlagData"]) {
-					let res = await axios.post(`${hostname}${route}/edit`, { civ: civ });
-					let html = res.data;
+					let response = await fetch(`${hostname}${route}/edit`, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ civ: civ }),
+					});
+					let html = await response.text();
 					let newhtml = "";
 					for (let i = 0; i < html.length; i++) {
 						newhtml += html[i];

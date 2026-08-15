@@ -1,12 +1,19 @@
+const { defaultRng } = require("../rng.js");
+
 module.exports = {
   generateNames,
 };
 
+// Set for the duration of a generateNames() call. generateNames is fully
+// synchronous, so no other invocation can interleave and observe it.
+let activeRng = defaultRng;
+
 function getRandomInt(max) {
-  return Math.floor(Math.random() * max);
+  return activeRng.int(max);
 }
 
-function generateNames(name_num) {
+function generateNames(name_num, rng = defaultRng) {
+  activeRng = rng;
   var bin1mini = 56;
   var bin2mini = 36;
 
@@ -852,7 +859,7 @@ function generateNames(name_num) {
     "Chernobyl",
   ];
 
-  names = [];
+  var names = [];
   for (var i = 0; i < name_num; i++) {
     var name = "";
     //Template 0: the bin0 bin2/bin5

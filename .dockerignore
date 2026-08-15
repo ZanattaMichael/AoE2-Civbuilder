@@ -1,0 +1,38 @@
+# The git history alone is ~440MB; it has no place in the build context.
+.git
+.github
+.vscode
+
+node_modules
+coverage
+tests
+e2e
+playwright-report
+test-results
+
+# Build output — the image rebuilds these from source in the build stage.
+modding/build
+modding/CMakeFiles
+modding/Makefile
+modding/cmake_install.cmake
+modding/CMakeCache.txt
+modding/vcpkg
+modding/oldgenieutils
+**/*.o
+**/*.o.d
+
+# Runtime state belongs in volumes, not layers.
+drafts/*.json
+modding/requested_mods/*
+database.json
+*.log
+logs.txt
+
+.env
+.env.*
+!.env.example
+
+Dockerfile
+docker-compose.yml
+README.md
+CONTRIBUTING.md
