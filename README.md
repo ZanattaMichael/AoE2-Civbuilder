@@ -147,14 +147,28 @@ Two suites, run separately:
   authorization. Each test process gets an isolated `APP_DIR`.
 - **`npm run test:e2e`** — Playwright. Drives a real browser against a real
   server: page loading and CSP, authoring and exporting a civilization,
-  generating and downloading a mod, every HTTP endpoint, multiplayer drafting
-  across independent browser contexts, and security properties mounted the way
-  an attacker would.
+  combining civilizations into a downloadable mod, generating a random mod,
+  every HTTP endpoint, multiplayer drafting across independent browser
+  contexts, and security properties mounted the way an attacker would.
 
 `tests/exploits.test.js` is an adversarial battery covering command injection,
 path traversal, zip slip, prototype pollution, denial-of-service bounds, header
 injection, authorization bypass and mass assignment. A failure there is a
 security regression.
+
+The two specs covering the site's central journey are worth knowing about:
+
+- `e2e/civilization.spec.js` authors a civilization by making real choices —
+  flag colours, architecture, language, bonus cards across all five rounds —
+  and asserts the exported document carries every one of them. The builder is
+  entirely client-side, so only a browser can tell whether a user's choice
+  reached the file they downloaded.
+- `e2e/combine.spec.js` runs the combine journey through the real UI: the
+  multi-file picker behind "Create Mod", the modifier form, and the download
+  the server's response triggers. It opens the resulting archive with
+  `e2e/zip.js` and checks the civilizations that went in are actually in the
+  mod — their names in the modded strings file, one AI file each — rather than
+  stopping at "the response was a zip".
 
 The fixture stubs only the native `create-data-mod` binary; everything else is
 the production code path. To run the E2E suite against a browser already

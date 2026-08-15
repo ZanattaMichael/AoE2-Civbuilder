@@ -70,6 +70,14 @@ function buildFixtureDir() {
 	}
 	fs.writeFileSync(path.join(appDir, "public", "vanillaFiles", "empires2_x2_p1.dat"), "stub-vanilla-dat");
 
+	// The base-game presets are the one game asset worth staging for real: they
+	// are 32KB of JSON rather than art, and the combine flow's "add a vanilla
+	// civilization to your own" journey cannot be exercised without them.
+	const vanillaPresets = path.join(repoRoot, "public", "vanillaFiles", "vanillaCivs", "VanillaJson.zip");
+	if (fs.existsSync(vanillaPresets)) {
+		fs.copyFileSync(vanillaPresets, path.join(appDir, "public", "vanillaFiles", "vanillaCivs", "VanillaJson.zip"));
+	}
+
 	const stubBin = path.join(appDir, "modding", "build", "create-data-mod");
 	fs.writeFileSync(stubBin, ["#!/bin/sh", "# $1=data.json $2=vanilla.dat $3=output.dat $4=aiconfig.json", 'mkdir -p "$(dirname "$3")"', 'printf "stub-dat" > "$3"', "exit 0"].join("\n") + "\n");
 	fs.chmodSync(stubBin, 0o755);
