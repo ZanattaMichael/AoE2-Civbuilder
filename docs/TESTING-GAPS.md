@@ -1,12 +1,23 @@
 # Testing gaps
 
-A review of the suite against the journeys a real user takes. Each entry is
-written to be filed as its own issue: what is untested, why it matters, and
-where to start.
+A review of the suite against the journeys a real user takes: what is untested,
+why it matters, and where to start.
 
-> GitHub Issues are currently disabled for this repository, so these live here
-> instead. Enabling them (Settings → General → Features → Issues) allows this
-> list to be split into tracked issues.
+Each entry is tracked as an issue. This document is the overview; the issues are
+where the work is claimed and closed.
+
+| #   | Gap                                       | Issue                                                              |
+| --- | ----------------------------------------- | ------------------------------------------------------------------ |
+| 1   | The custom flag upload path               | [#5](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/5)   |
+| 2   | Share links, and the view/edit round trip | [#6](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/6)   |
+| 3   | The combine compatibility check           | [#7](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/7)   |
+| 4   | The builder's validation gates            | [#8](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/8)   |
+| 5   | Tech tree editing                         | [#9](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/9)   |
+| 6   | Modifier effects on the generated mod     | [#10](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/10) |
+| 7   | Board filters and card counts             | [#11](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/11) |
+| 8   | Vanilla civilizations beyond the first    | [#12](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/12) |
+| 9   | Real `create-data-mod` output             | [#13](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/13) |
+| 10  | The draft-to-mod journey                  | [#14](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/14) |
 
 The suite already covers the central path end to end: authoring a civilization
 with real choices, combining several into a mod, and downloading it
