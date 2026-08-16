@@ -6,18 +6,18 @@ why it matters, and where to start.
 Each entry is tracked as an issue. This document is the overview; the issues are
 where the work is claimed and closed.
 
-| #   | Gap                                       | Issue                                                              |
-| --- | ----------------------------------------- | ------------------------------------------------------------------ |
-| 1   | The custom flag upload path               | [#5](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/5)   |
-| 2   | Share links, and the view/edit round trip | [#6](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/6)   |
-| 3   | The combine compatibility check           | [#7](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/7)   |
-| 4   | The builder's validation gates            | [#8](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/8)   |
-| 5   | Tech tree editing                         | [#9](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/9)   |
-| 6   | Modifier effects on the generated mod     | [#10](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/10) |
-| 7   | Board filters and card counts             | [#11](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/11) |
-| 8   | Vanilla civilizations beyond the first    | [#12](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/12) |
-| 9   | Real `create-data-mod` output             | [#13](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/13) |
-| 10  | The draft-to-mod journey                  | [#14](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/14) |
+| #   | Gap                                       | Issue                                                                     |
+| --- | ----------------------------------------- | ------------------------------------------------------------------------- |
+| 1   | The custom flag upload path               | [#5](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/5)          |
+| 2   | Share links, and the view/edit round trip | [#6](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/6)          |
+| 3   | The combine compatibility check           | [#7](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/7)          |
+| 4   | The builder's validation gates            | [#8](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/8)          |
+| 5   | Tech tree editing                         | [#9](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/9)          |
+| 6   | Modifier effects on the generated mod     | [#10](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/10)        |
+| 7   | Board filters and card counts             | [#11](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/11)        |
+| 8   | Vanilla civilizations beyond the first    | [#12](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/12) — done |
+| 9   | Real `create-data-mod` output             | [#13](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/13)        |
+| 10  | The draft-to-mod journey                  | [#14](https://github.com/ZanattaMichael/AoE2-Civbuilder/issues/14)        |
 
 The suite already covers the central path end to end: authoring a civilization
 with real choices, combining several into a mod, and downloading it
@@ -133,17 +133,20 @@ unit, building and technology, toggle one of each, and assert the corresponding
 
 ## 6. Modifier effects on the generated mod
 
-**Partially tested.** `e2e/combine.spec.js` asserts the modifier form's values
-reach the `/create` request. Nothing asserts they change the mod.
+**Partially tested.** The client side is now fully covered by the `modifiers`
+block in `e2e/combine.spec.js`: all six settings reach the request, an untouched
+panel sends neutral values, the sliders drive the numbers beside them, typed
+values clamp to each field's own limits, and the Civilizations dropdown's three
+branches all run. What is still missing is the server side — that the modifiers
+**change the generated mod**, not merely that they arrive.
 
 **Why it matters.** `hp`, `speed`, `building`, `blind`, `infinity` and
 `randomCosts` are applied during generation. The request carrying them proves
 the client wired the form up, not that the server honoured them.
 
 **Where to start.** Generate twice from the same seed and preset, once with
-default modifiers and once with `hp: 2`, and assert the data mod differs. Note
-that the local fixture stubs the native `.dat` rewriter, so this likely belongs
-in the container run — see gap 9.
+default modifiers and once with `hp: 2`, and assert the data mod differs. The
+local fixture stubs the native `.dat` rewriter, so this is blocked on gap 9.
 
 ---
 
@@ -164,17 +167,18 @@ the visible card count drops.
 
 ---
 
-## 8. Vanilla civilizations beyond the first
+## 8. Vanilla civilizations beyond the first — done
 
-**Partially tested.** `e2e/combine.spec.js` combines the first entry from
-`VanillaJson.zip` with an authored civilization.
+**Closed.** `e2e/combine.spec.js` now runs the base-game journey the way a
+player uses it: Get Vanilla Civs, then Create Mod with the whole set uploaded
+together. Every entry is checked for shape, all 50 are combined into one mod
+with each alias verified in the modded strings file and one AI file apiece, and
+a second case fills the last slot with an authored civilization.
 
-**Why it matters.** The archive holds every base-game civilization, and they are
-the most likely input to a real combine. A parse failure in any one of them
-breaks that user's mod with no clear message.
-
-**Where to start.** Iterate every entry in the archive, assert each parses and
-has the expected shape, and combine a handful in one mod.
+Worth remembering: the archive holds **exactly 50** presets, which is exactly
+the client's `numCivs` ceiling. The run sits on that boundary deliberately, and
+will start failing if a civilization is added to the game without the cap being
+raised.
 
 ---
 
