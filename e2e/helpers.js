@@ -135,6 +135,110 @@ function expectNoProblems(problems) {
 }
 
 /**
+ * Authors a civilization through the builder UI.
+ *
+ * The builder runs in three phases — flag creator, tech tree, bonus board — and
+ * this drives all of them, so the resulting civilization reflects real choices
+ * rather than the defaults the page starts with. Every option is optional;
+ * passing none still walks the full journey.
+ *
+ * `bonuses` is a map of round index to the card indices to pick in that round.
+ * The board shows one round at a time, and rounds are reached with the arrows
+ * beside the phase name, so picks are made round by round in order.
+ */
+async function authorCivilization(page, { name = "E2E Civ", description, architectureSteps = 0, languageSteps = 0, wonderSteps = 0, castleSteps = 0, paletteSteps = {}, bonuses = {} } = {}) {
+	await page.goto(`${BASE}/build`);
+	await expect(page.locator("#alias")).toBeVisible();
+	await page.locator("#alias").fill(name);
+
+	// The flag palette is eight categories, each a back/forward pair around a
+	// label. Advancing a category cycles that slot's value.
+	for (const [category, steps] of Object.entries(paletteSteps)) {
+		for (let step = 0; step < steps; step++) {
+			await page.locator("#pickGrid button.forwardbutton").nth(Number(category)).click();
+		}
+	}
+
+	for (let step = 0; step < architectureSteps; step++) {
+		await page.locator("#archbox button.forwardbutton").click();
+	}
+
+	// Description, language, wonder and castle live behind the advanced panel,
+	// which starts collapsed — their controls exist in the DOM but are not
+	// clickable until it is opened.
+	if (description !== undefined || languageSteps > 0 || wonderSteps > 0 || castleSteps > 0) {
+		await page.locator("#advancedbutton").click();
+		await expect(page.locator("#advancedbox")).toBeVisible();
+
+		if (description !== undefined) {
+			await page.locator("#descriptioninput").fill(description);
+			// The field commits on change, which blurring triggers.
+			await page.locator("#descriptioninput").blur();
+		}
+		for (let step = 0; step < languageSteps; step++) {
+			await page.locator("#langbox button.forwardbutton").click();
+		}
+		for (let step = 0; step < wonderSteps; step++) {
+			await page.locator("#wonderbox button.forwardbutton").click();
+		}
+		for (let step = 0; step < castleSteps; step++) {
+			await page.locator("#castlebox button.forwardbutton").click();
+		}
+	}
+
+	await page.getByRole("button", { name: "Next" }).click();
+
+	// Advancing opens the tech tree overlay, which hides the rest of the page
+	// while it renders. It has no "finished rendering" signal and re-applies the
+	// hiding as its data arrives, so let it settle before closing it.
+	await expect(page.locator("#techtree")).toBeVisible();
+	await page.waitForTimeout(1000);
+	await page.locator("#done").click();
+
+	// The board is back once its toolbar exists. The toolbar's buttons carry
+	// visibility:hidden until the mouse leaves a bonus card — an affordance so
+	// they do not cover the card being inspected — so the controls are clicked
+	// with force rather than waiting on that styling.
+	await expect(page.locator("#boardtoolbar")).toBeAttached();
+	await expect(page.locator("#finish")).toBeAttached();
+
+	const rounds = Object.keys(bonuses)
+		.map(Number)
+		.sort((a, b) => a - b);
+	let currentRound = 0;
+	for (const round of rounds) {
+		while (currentRound < round) {
+			await page.locator("#buttonright").click();
+			currentRound++;
+		}
+		for (const card of bonuses[round]) {
+			await page.locator(`#card${card}`).click({ force: true });
+		}
+	}
+}
+
+/** Reads the civilization the builder has assembled in the page. */
+async function civilizationInPage(page) {
+	return page.evaluate(() => JSON.parse(JSON.stringify(window.civ)));
+}
+
+/** Clicks the board's Download control, bypassing its hover-gated styling. */
+async function downloadCivilization(page) {
+	const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#finish").click({ force: true })]);
+	return download;
+}
+
+/** Reads a download's bytes without depending on where Playwright staged it. */
+async function downloadBytes(download) {
+	const stream = await download.createReadStream();
+	const chunks = [];
+	for await (const chunk of stream) {
+		chunks.push(chunk);
+	}
+	return Buffer.concat(chunks);
+}
+
+/**
  * Creates a draft through the real form and returns its ID and invite links.
  */
 async function createDraft(page, { players = 2, rounds = 3, currency = 100 } = {}) {
@@ -183,6 +287,10 @@ module.exports = {
 	newPlayerContext,
 	collectPageProblems,
 	expectNoProblems,
+	authorCivilization,
+	civilizationInPage,
+	downloadCivilization,
+	downloadBytes,
 	createDraft,
 	joinDraft,
 	seatOf,
