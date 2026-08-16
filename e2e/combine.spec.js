@@ -132,38 +132,6 @@ test.describe("combining civilizations", () => {
 		expect(zip.listFileNames(mod.ui).filter((name) => name.endsWith(".per"))).toHaveLength(names.length);
 	});
 
-	test("applies the modifiers chosen on the form", async ({ page }) => {
-		const civ = await exportCivilization(page, { name: "Modified", bonuses: { 0: [0] } });
-
-		const input = await openCombinePicker(page);
-
-		await page.locator("#randomCostInput").check();
-		await page.locator("#blindInput").check();
-		await page.locator("#healthValue").fill("2");
-		await page.locator("#speedValue").fill("1.5");
-		await page.locator("#buildingValue").fill("0.5");
-
-		// The client reads the form when the files are chosen, so the request the
-		// page issues is the proof the values were carried.
-		const [request, download] = await Promise.all([
-			page.waitForRequest((candidate) => candidate.url().endsWith("/create") && candidate.method() === "POST"),
-			page.waitForEvent("download", { timeout: 120000 }),
-			input.setInputFiles([{ name: `${civ.name}.json`, mimeType: "application/json", buffer: civ.buffer }]),
-		]);
-
-		const submitted = new URLSearchParams(request.postData());
-		const modifiers = JSON.parse(submitted.get("modifiers"));
-
-		expect(modifiers.randomCosts).toBe(true);
-		expect(modifiers.blind).toBe(true);
-		expect(modifiers.hp).toBe(2);
-		expect(modifiers.speed).toBe(1.5);
-		expect(modifiers.building).toBe(0.5);
-
-		// And the mod still builds with them applied.
-		expect(moddedStrings(openMod(await downloadBytes(download)).ui)).toContain(`"${civ.name}"`);
-	});
-
 	test("sends every chosen civilization to the server, not just the first", async ({ page }) => {
 		const first = await exportCivilization(page, { name: "Sentinel One", bonuses: { 0: [0] } });
 		const second = await exportCivilization(page, { name: "Sentinel Two", bonuses: { 0: [3] } });
@@ -179,6 +147,175 @@ test.describe("combining civilizations", () => {
 		const presets = JSON.parse(new URLSearchParams(request.postData()).get("presets"));
 		expect(presets.presets).toHaveLength(2);
 		expect(presets.presets.map((preset) => preset.alias)).toEqual([first.name, second.name]);
+	});
+});
+
+/**
+ * The modifier panel above "Create Mod".
+ *
+ * Six settings ride along with every generated mod, and the "Civilizations"
+ * dropdown changes what the button does entirely: on `custom` it opens the file
+ * picker and posts the uploaded presets to /create, while `random` and
+ * `vanilla` skip the picker and post to /random instead. Getting any of this
+ * wrong is silent — the mod still downloads, just not the one that was asked
+ * for — so these assert on the request the page issues.
+ */
+test.describe("modifiers", () => {
+	/** The modifier payload the page attached to a generation request. */
+	function modifiersIn(request) {
+		return JSON.parse(new URLSearchParams(request.postData()).get("modifiers"));
+	}
+
+	function generationRequest(page, route) {
+		return page.waitForRequest((candidate) => candidate.url().endsWith(route) && candidate.method() === "POST");
+	}
+
+	test("carries every modifier, including x256 Ages", async ({ page }) => {
+		const civ = await exportCivilization(page, { name: "Modified", bonuses: { 0: [0] } });
+
+		const input = await openCombinePicker(page);
+
+		await page.locator("#randomCostInput").check();
+		await page.locator("#blindInput").check();
+		await page.locator("#infinityInput").check();
+		await page.locator("#healthValue").fill("2");
+		await page.locator("#speedValue").fill("1.5");
+		await page.locator("#buildingValue").fill("0.5");
+
+		// The client reads the form when the files are chosen, so the request the
+		// page issues is the proof the values were carried.
+		const [request, download] = await Promise.all([
+			generationRequest(page, "/create"),
+			page.waitForEvent("download", { timeout: 120000 }),
+			input.setInputFiles([{ name: `${civ.name}.json`, mimeType: "application/json", buffer: civ.buffer }]),
+		]);
+
+		expect(modifiersIn(request)).toEqual({
+			randomCosts: true,
+			blind: true,
+			infinity: true,
+			hp: 2,
+			speed: 1.5,
+			building: 0.5,
+		});
+
+		// And the mod still builds with them applied.
+		expect(moddedStrings(openMod(await downloadBytes(download)).ui)).toContain(`"${civ.name}"`);
+	});
+
+	test("defaults to leaving the game unmodified", async ({ page }) => {
+		const civ = await exportCivilization(page, { name: "Untouched", bonuses: { 0: [0] } });
+		const input = await openCombinePicker(page);
+
+		const [request] = await Promise.all([
+			generationRequest(page, "/create"),
+			page.waitForEvent("download", { timeout: 120000 }),
+			input.setInputFiles([{ name: `${civ.name}.json`, mimeType: "application/json", buffer: civ.buffer }]),
+		]);
+
+		// The multipliers are neutral at 1 and the toggles off, so an untouched
+		// panel must not quietly alter the game.
+		expect(modifiersIn(request)).toEqual({
+			randomCosts: false,
+			blind: false,
+			infinity: false,
+			hp: 1,
+			speed: 1,
+			building: 1,
+		});
+	});
+
+	test("the sliders drive the values that are sent", async ({ page }) => {
+		const civ = await exportCivilization(page, { name: "Slid", bonuses: { 0: [0] } });
+		const input = await openCombinePicker(page);
+
+		// Each slider is two-way bound to the number beside it; moving the slider
+		// is how most users set these at all.
+		await page.locator("#healthRange").fill("3.5");
+		await page.locator("#speedRange").fill("0.25");
+		await page.locator("#buildingRange").fill("7");
+
+		await expect(page.locator("#healthValue")).toHaveValue("3.5");
+		await expect(page.locator("#speedValue")).toHaveValue("0.25");
+		await expect(page.locator("#buildingValue")).toHaveValue("7");
+
+		const [request] = await Promise.all([
+			generationRequest(page, "/create"),
+			page.waitForEvent("download", { timeout: 120000 }),
+			input.setInputFiles([{ name: `${civ.name}.json`, mimeType: "application/json", buffer: civ.buffer }]),
+		]);
+
+		const modifiers = modifiersIn(request);
+		expect(modifiers.hp).toBe(3.5);
+		expect(modifiers.speed).toBe(0.25);
+		expect(modifiers.building).toBe(7);
+	});
+
+	test("clamps values typed past their limits", async ({ page }) => {
+		await openCombinePicker(page);
+
+		// The number fields accept more than the slider's range and clamp on
+		// change, each to its own ceiling and floor.
+		for (const [field, typed, clamped] of [
+			["#healthValue", "999", "100"],
+			["#healthValue", "-5", "0"],
+			["#speedValue", "999", "20"],
+			["#speedValue", "-5", "0"],
+			["#buildingValue", "999", "100"],
+			["#buildingValue", "0", "0.001"],
+		]) {
+			await page.locator(field).fill(typed);
+			await page.locator(field).blur();
+			await expect(page.locator(field), `${field} typed ${typed}`).toHaveValue(clamped);
+		}
+	});
+
+	test("Civilizations: Random generates without asking for files", async ({ page }) => {
+		await openCombinePicker(page);
+		await page.locator("#baseInput").selectOption("random");
+		await page.locator("#infinityInput").check();
+
+		// On random the picker never opens: clicking Create Mod posts straight to
+		// the random generator instead.
+		const [request, download] = await Promise.all([generationRequest(page, "/random"), page.waitForEvent("download", { timeout: 120000 }), page.locator("#viewCiv").click()]);
+
+		const submitted = new URLSearchParams(request.postData());
+		expect(submitted.get("civs")).toBe("true");
+		expect(modifiersIn(request).infinity).toBe(true);
+
+		expect(zip.listFileNames(await downloadBytes(download))).toContain("thumbnail.jpg");
+	});
+
+	test("Civilizations: Vanilla applies modifiers to the base game", async ({ page }) => {
+		await openCombinePicker(page);
+		await page.locator("#baseInput").selectOption("vanilla");
+		await page.locator("#healthValue").fill("4");
+
+		const [request, download] = await Promise.all([generationRequest(page, "/random"), page.waitForEvent("download", { timeout: 120000 }), page.locator("#viewCiv").click()]);
+
+		const submitted = new URLSearchParams(request.postData());
+		// Vanilla means the base game's own civilizations, so nothing is generated.
+		expect(submitted.get("civs")).toBe("false");
+		expect(modifiersIn(request).hp).toBe(4);
+
+		expect(zip.listFileNames(await downloadBytes(download))).toContain("thumbnail.jpg");
+	});
+
+	test("Civilizations: Custom is what opens the file picker", async ({ page }) => {
+		const input = await openCombinePicker(page);
+		await expect(page.locator("#baseInput")).toHaveValue("custom");
+
+		const civ = await exportCivilization(page, { name: "Chosen", bonuses: { 0: [0] } });
+		const picker = await openCombinePicker(page);
+
+		const [request] = await Promise.all([
+			generationRequest(page, "/create"),
+			page.waitForEvent("download", { timeout: 120000 }),
+			picker.setInputFiles([{ name: `${civ.name}.json`, mimeType: "application/json", buffer: civ.buffer }]),
+		]);
+
+		expect(new URLSearchParams(request.postData()).get("presets")).toContain(civ.name);
+		expect(input).toBeDefined();
 	});
 });
 
@@ -201,6 +338,14 @@ test.describe("vanilla civilizations", () => {
 		return downloadBytes(download);
 	}
 
+	/** Unpacks every preset in the downloaded archive into combine-ready files. */
+	function presetsIn(archive) {
+		return zip.listFileNames(archive).map((name) => ({
+			name: name.replace(/\.json$/, ""),
+			buffer: zip.readFile(archive, name),
+		}));
+	}
+
 	test("downloads the base-game presets", async ({ page }) => {
 		const archive = await downloadVanilla(page);
 
@@ -208,11 +353,64 @@ test.describe("vanilla civilizations", () => {
 		expect(names.length).toBeGreaterThan(0);
 		expect(names.every((name) => name.endsWith(".json"))).toBe(true);
 
-		// Each one must be a civilization the combine flow can actually accept.
-		const first = JSON.parse(zip.readFile(archive, names[0]).toString("utf8"));
-		expect(typeof first.alias).toBe("string");
-		expect(first.tree).toHaveLength(3);
-		expect(first.bonuses).toHaveLength(5);
+		// Every one must be a civilization the combine flow can actually accept —
+		// a single unparseable entry breaks that user's mod with no clear message.
+		for (const preset of presetsIn(archive)) {
+			const civ = JSON.parse(preset.buffer.toString("utf8"));
+			expect(typeof civ.alias, preset.name).toBe("string");
+			expect(civ.tree, preset.name).toHaveLength(3);
+			expect(civ.bonuses, preset.name).toHaveLength(5);
+		}
+	});
+
+	/**
+	 * The headline journey for the base game: Get Vanilla Civs, then hand the
+	 * whole set straight back to Create Mod.
+	 *
+	 * The archive holds exactly 50 presets, which is exactly the client's
+	 * `numCivs` ceiling — `checkCompatibility` aborts above it, so this run sits
+	 * on the boundary and would start failing the moment a civilization is added
+	 * to the game without the cap being raised.
+	 */
+	test("combines the entire base game into one mod", async ({ page }) => {
+		test.slow();
+
+		const archive = await downloadVanilla(page);
+		const presets = presetsIn(archive);
+		const aliases = presets.map((preset) => JSON.parse(preset.buffer.toString("utf8")).alias);
+
+		expect(presets.length, "the whole set should be within the client's cap").toBeLessThanOrEqual(50);
+
+		const mod = openMod(await downloadBytes(await combineAndDownload(page, presets)));
+
+		const strings = moddedStrings(mod.ui);
+		for (const alias of aliases) {
+			expect(strings, `${alias} missing from the mod`).toContain(`"${alias}"`);
+		}
+
+		// One AI per civilization, so nothing was silently dropped along the way.
+		expect(zip.listFileNames(mod.ui).filter((name) => name.endsWith(".per"))).toHaveLength(presets.length);
+	});
+
+	test("combines the whole base game with civilizations of your own", async ({ page }) => {
+		test.slow();
+
+		const authored = await exportCivilization(page, { name: "Newcomers", bonuses: { 0: [4] } });
+
+		const archive = await downloadVanilla(page);
+		// The cap counts every file handed to the picker, so authored
+		// civilizations displace base-game ones rather than adding to them.
+		const presets = presetsIn(archive).slice(0, 49);
+		const aliases = presets.map((preset) => JSON.parse(preset.buffer.toString("utf8")).alias);
+
+		const mod = openMod(await downloadBytes(await combineAndDownload(page, [...presets, authored])));
+
+		const strings = moddedStrings(mod.ui);
+		expect(strings).toContain(`"${authored.name}"`);
+		for (const alias of aliases) {
+			expect(strings, `${alias} missing from the mod`).toContain(`"${alias}"`);
+		}
+		expect(zip.listFileNames(mod.ui).filter((name) => name.endsWith(".per"))).toHaveLength(presets.length + 1);
 	});
 
 	test("a base-game civilization combines with an authored one", async ({ page }) => {

@@ -164,11 +164,23 @@ The two specs covering the site's central journey are worth knowing about:
   entirely client-side, so only a browser can tell whether a user's choice
   reached the file they downloaded.
 - `e2e/combine.spec.js` runs the combine journey through the real UI: the
-  multi-file picker behind "Create Mod", the modifier form, and the download
+  multi-file picker behind "Create Mod", the modifier panel, and the download
   the server's response triggers. It opens the resulting archive with
   `e2e/zip.js` and checks the civilizations that went in are actually in the
   mod — their names in the modded strings file, one AI file each — rather than
   stopping at "the response was a zip".
+
+  It covers the base-game journey the way a player uses it: **Get Vanilla
+  Civs** to download the presets, then **Create Mod** with the whole set
+  uploaded together. That archive holds exactly 50 civilizations, which is
+  exactly the client's `numCivs` ceiling, so the run sits on the boundary and
+  will start failing if a civilization is added to the game without the cap
+  being raised.
+
+  Every modifier is covered too, including the **Civilizations** dropdown,
+  which changes what "Create Mod" does: on `custom` it opens the file picker
+  and posts to `/create`, while `random` and `vanilla` skip the picker and post
+  to `/random` instead.
 
 The fixture stubs only the native `create-data-mod` binary; everything else is
 the production code path. To run the E2E suite against a browser already
